@@ -1,0 +1,15 @@
+{
+  "name": "amigal",
+  "private": true,
+  "workspaces": [
+    "backend",
+    "frontend",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "docker-compose up --build",
+    "build": "npm run build --workspaces",
+    "test": "npm run test --workspaces",
+    "lint": "npm run lint --workspaces"
+  }
+}
