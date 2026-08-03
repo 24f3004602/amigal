@@ -1,17 +1,29 @@
-export const metadata = {
-  title: 'Amigal — Talk to Strangers',
-  description: 'Futuristic random chat with strangers. Text or video.',
+import type { Metadata } from 'next';
+import { Inter } from 'next/font/google';
+import './globals.css';
+import { ThemeProvider } from '@/components/providers/ThemeProvider';
+import { AuthProvider } from '@/components/providers/AuthProvider';
+import { SocketProvider } from '@/components/providers/SocketProvider';
+
+const inter = Inter({ subsets: ['latin'] });
+
+export const metadata: Metadata = {
+  title: 'Amigal — Video Collaboration',
+  description: 'Secure, high-quality video meetings and chat.',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
-      <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
-      </head>
-      <body className="antialiased">{children}</body>
+    <html lang="en" suppressHydrationWarning>
+      <body className={`${inter.className} antialiased bg-black text-white`}>
+        <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
+          <AuthProvider>
+            <SocketProvider>
+              {children}
+            </SocketProvider>
+          </AuthProvider>
+        </ThemeProvider>
+      </body>
     </html>
   );
 }
