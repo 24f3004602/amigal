@@ -18,8 +18,13 @@ export default function Home() {
   const { reset, setRoom } = useChatStore();
 
   useEffect(() => {
-    api
-      .get('/auth/me')
+    // Check for OAuth redirect
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('auth') === 'success') {
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+
+    api.get('/auth/me')
       .then((res) => res.json())
       .then((data) => {
         if (data) setUser(data);
@@ -45,14 +50,14 @@ export default function Home() {
   };
 
   return (
-    <main className="min-h-screen bg-gray-950 text-white">
+    <main className="min-h-screen bg-black text-white">
       {screen === 'landing' && (
         <LandingScreen
           onStart={() => setScreen(user ? 'matching' : 'auth')}
           user={user}
         />
       )}
-      {screen === 'auth' && <AuthScreen onSuccess={handleAuthSuccess} />}
+      {screen === 'auth' && <AuthScreen onAuthSuccess={handleAuthSuccess} />}
       {screen === 'matching' && (
         <MatchingScreen
           onMatchFound={handleMatchFound}
@@ -63,7 +68,7 @@ export default function Home() {
       {screen === 'chat' && <ChatScreen onEnd={() => setScreen('post-chat')} />}
       {screen === 'post-chat' && (
         <PostChatScreen
-          onFindNew={() => {
+          onNewChat={() => {
             reset();
             setScreen('matching');
           }}
