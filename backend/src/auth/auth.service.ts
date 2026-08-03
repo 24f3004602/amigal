@@ -3,99 +3,127 @@ import { PrismaService } from '../prisma/prisma.service';
 import * as bcrypt from 'bcrypt';
 import * as jwt from 'jsonwebtoken';
 import { v4 as uuidv4 } from 'uuid';
-import { LoginDto, RegisterDto } from './dto';
 
 @Injectable()
 export class AuthService {
   constructor(private prisma: PrismaService) {}
 
-  async register(dto: RegisterDto) {
-    const existing = await this.prisma.user.findUnique({ where: { email: dto.email } });
-    if (existing) throw new ConflictException('Email already registered');
-    const passwordHash = await bcrypt.hash(dto.password, 12);
-    const user = await this.prisma.user.create({
-      data: {
-        email: dto.email,
-        passwordHash,
-        displayName: dto.displayName || `User ${Math.floor(Math.random() * 10000)}`,
-      },
-      select: { id: true, email: true, displayName: true, reputationScore: true, subscriptionTier: true },
-    });
-    const tokens = await this.generateTokens(user.id, user.email);
-    return { user, ...tokens };
+  private generateTokens(userId: string, email: string) {
+    const accessToken = jwt.sign({ userId, email }, process.env.JWT_SECRET!, { expiresIn: '15m' });
+    const refreshToken = uuidv4();
+    return { accessToken, refreshToken };
   }
 
-  async login(dto: LoginDto) {
-    const user = await this.prisma.user.findUnique({ where: { email: dto.email } });
-    if (!user) throw new UnauthorizedException('Invalid credentials');
-    const valid = await bcrypt.compare(dto.password, user.passwordHash);
+  async register(email: string, password: string, displayName?: string) {
+    const existing = await this.prisma.user.findUnique({ where: { email } });
+    if (existing) throw new ConflictException('Email already registered');
+
+    const passwordHash = await bcrypt.hash(password, 10);
+    const user = await this.prisma.user.create({
+      data: { email, passwordHash, displayName, provider: 'local' },
+    });
+
+    return this.createSession(user);
+  }
+
+  async login(email: string, password: string) {
+    const user = await this.prisma.user.findUnique({ where: { email } });
+    if (!user || !user.passwordHash) throw new UnauthorizedException('Invalid credentials');
+
+    const valid = await bcrypt.compare(password, user.passwordHash);
     if (!valid) throw new UnauthorizedException('Invalid credentials');
-    if (user.isBanned) {
-      if (user.banUntil && user.banUntil > new Date()) {
-        throw new UnauthorizedException('Account suspended');
-      }
+
+    return this.createSession(user);
+  }
+
+  async oauthLogin(oauthUser: any) {
+    let user = await this.prisma.user.findFirst({
+      where: {
+        provider: oauthUser.provider,
+        providerId: oauthUser.providerId,
+      },
+    });
+
+    if (!user) {
+      user = await this.prisma.user.create({
+        data: {
+          email: oauthUser.email,
+          displayName: oauthUser.displayName,
+          avatarUrl: oauthUser.avatarUrl,
+          provider: oauthUser.provider,
+          providerId: oauthUser.providerId,
+        },
+      });
     }
-    const tokens = await this.generateTokens(user.id, user.email);
+
+    return this.createSession(user);
+  }
+
+  private async createSession(user: any) {
+    const { accessToken, refreshToken } = this.generateTokens(user.id, user.email);
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+
+    await this.prisma.refreshToken.create({
+      data: { token: refreshToken, userId: user.id, expiresAt },
+    });
+
     return {
       user: {
-        id: user.id, email: user.email, displayName: user.displayName,
-        reputationScore: user.reputationScore, subscriptionTier: user.subscriptionTier,
+        id: user.id,
+        email: user.email,
+        displayName: user.displayName,
+        avatarUrl: user.avatarUrl,
+        subscriptionTier: user.subscriptionTier,
+        videoChatsUsed: user.videoChatsUsed,
+        videoChatsLimit: user.videoChatsLimit,
       },
-      ...tokens,
+      accessToken,
+      refreshToken,
     };
   }
 
-  async refreshTokens(refreshToken: string) {
-    const stored = await this.prisma.refreshToken.findUnique({
+  async refresh(refreshToken: string) {
+    const tokenRecord = await this.prisma.refreshToken.findUnique({
       where: { token: refreshToken },
       include: { user: true },
     });
-    if (!stored || stored.expiresAt < new Date()) {
+
+    if (!tokenRecord || tokenRecord.expiresAt < new Date()) {
       throw new UnauthorizedException('Invalid refresh token');
     }
-    await this.prisma.refreshToken.delete({ where: { id: stored.id } });
-    const tokens = await this.generateTokens(stored.user.id, stored.user.email);
-    return {
-      user: {
-        id: stored.user.id, email: stored.user.email, displayName: stored.user.displayName,
-        reputationScore: stored.user.reputationScore, subscriptionTier: stored.user.subscriptionTier,
+
+    const { accessToken, refreshToken: newRefresh } = this.generateTokens(tokenRecord.user.id, tokenRecord.user.email);
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+
+    await this.prisma.refreshToken.delete({ where: { id: tokenRecord.id } });
+    await this.prisma.refreshToken.create({
+      data: { token: newRefresh, userId: tokenRecord.user.id, expiresAt },
+    });
+
+    return { accessToken, refreshToken: newRefresh };
+  }
+
+  async me(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        email: true,
+        displayName: true,
+        avatarUrl: true,
+        reputationScore: true,
+        subscriptionTier: true,
+        videoChatsUsed: true,
+        videoChatsLimit: true,
+        isBanned: true,
+        banUntil: true,
       },
-      ...tokens,
-    };
+    });
+    return user;
   }
 
   async logout(refreshToken: string) {
     await this.prisma.refreshToken.deleteMany({ where: { token: refreshToken } });
-  }
-
-  async me(token: string) {
-    try {
-      const payload = jwt.verify(token, process.env.JWT_SECRET!) as any;
-      const user = await this.prisma.user.findUnique({
-        where: { id: payload.userId },
-        select: {
-          id: true, email: true, displayName: true,
-          reputationScore: true, subscriptionTier: true,
-          videoChatsUsed: true, videoChatsLimit: true,
-          subscriptionStatus: true, subscriptionEndsAt: true,
-        },
-      });
-      return user;
-    } catch {
-      throw new UnauthorizedException();
-    }
-  }
-
-  private async generateTokens(userId: string, email: string) {
-    const accessToken = jwt.sign({ userId, email }, process.env.JWT_SECRET!, { expiresIn: '15m' });
-    const refreshToken = uuidv4();
-    await this.prisma.refreshToken.create({
-      data: {
-        token: refreshToken,
-        userId,
-        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-      },
-    });
-    return { accessToken, refreshToken };
+    return { success: true };
   }
 }
