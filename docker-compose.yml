@@ -67,6 +67,21 @@ services:
     depends_on:
       - backend
 
+  coturn:
+    image: coturn/coturn:latest
+    container_name: amigal-coturn
+    ports:
+      - "3478:3478/tcp"
+      - "3478:3478/udp"
+      - "5349:5349/tcp"
+      - "5349:5349/udp"
+      - "10000-20000:10000-20000/udp"
+    volumes:
+      - ./docker/coturn.conf:/etc/coturn/turnserver.conf
+    environment:
+      - EXTERNAL_IP=${EXTERNAL_IP}
+      - TURN_SECRET=${TURN_SECRET}
+
 volumes:
   postgres_data:
   redis_data:
