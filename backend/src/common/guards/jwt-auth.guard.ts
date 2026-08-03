@@ -2,10 +2,14 @@ import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from
 import { Request } from 'express';
 import * as jwt from 'jsonwebtoken';
 
+interface RequestWithUser extends Request {
+  user: any;
+}
+
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
   canActivate(context: ExecutionContext): boolean {
-    const request = context.switchToHttp().getRequest<Request>();
+    const request = context.switchToHttp().getRequest<RequestWithUser>();
     const token = request.cookies?.access_token || request.headers.authorization?.replace('Bearer ', '');
     if (!token) throw new UnauthorizedException('No token provided');
     try {
