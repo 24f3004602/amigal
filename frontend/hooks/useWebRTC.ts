@@ -7,7 +7,7 @@ const ICE_SERVERS: RTCIceServer[] = [
   { urls: 'stun:stun1.l.google.com:19302' },
 ];
 
-export function useWebRTC(roomId: string, mode: 'text' | 'video', socket: Socket | null) {
+export function useWebRTC(roomId: string, mode: 'text' | 'video', socket: any) {
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
   const [connectionState, setConnectionState] = useState<RTCPeerConnectionState>('new');
