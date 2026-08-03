@@ -22,8 +22,8 @@ return {candidateId, roomId}
 
 @Injectable()
 export class MatchingService {
-      constructor(private prisma: PrismaService, private redis: RedisService) {
-    this.redis.getClient().defineCommand('atomicMatch', {
+        constructor(private prisma: PrismaService, private redis: RedisService) {
+    this.redis.defineCommand('atomicMatch', {
       numberOfKeys: 3,
       lua: MATCH_LUA,
     });
