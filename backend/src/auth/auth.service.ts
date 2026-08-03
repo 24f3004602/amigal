@@ -1,15 +1,18 @@
 import { Injectable, UnauthorizedException, ConflictException } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../prisma/prisma.service';
 import * as bcrypt from 'bcrypt';
-import * as jwt from 'jsonwebtoken';
 import { v4 as uuidv4 } from 'uuid';
 
 @Injectable()
 export class AuthService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private jwtService: JwtService,
+  ) {}
 
   private generateTokens(userId: string, email: string) {
-    const accessToken = jwt.sign({ userId, email }, process.env.JWT_SECRET!, { expiresIn: '15m' });
+    const accessToken = this.jwtService.sign({ userId, email }, { expiresIn: '15m' });
     const refreshToken = uuidv4();
     return { accessToken, refreshToken };
   }
@@ -18,7 +21,7 @@ export class AuthService {
     const existing = await this.prisma.user.findUnique({ where: { email } });
     if (existing) throw new ConflictException('Email already registered');
 
-    const passwordHash = await bcrypt.hash(password, 10);
+    const passwordHash = await bcrypt.hash(password, 12);
     const user = await this.prisma.user.create({
       data: { email, passwordHash, displayName, provider: 'local' },
     });
@@ -38,10 +41,7 @@ export class AuthService {
 
   async oauthLogin(oauthUser: any) {
     let user = await this.prisma.user.findFirst({
-      where: {
-        provider: oauthUser.provider,
-        providerId: oauthUser.providerId,
-      },
+      where: { provider: oauthUser.provider, providerId: oauthUser.providerId },
     });
 
     if (!user) {
@@ -83,28 +83,34 @@ export class AuthService {
   }
 
   async refresh(refreshToken: string) {
-    const tokenRecord = await this.prisma.refreshToken.findUnique({
-      where: { token: refreshToken },
-      include: { user: true },
+    // Atomic transaction prevents race-condition replay attacks
+    return this.prisma.$transaction(async (tx) => {
+      const tokenRecord = await tx.refreshToken.findUnique({
+        where: { token: refreshToken },
+        include: { user: true },
+      });
+
+      if (!tokenRecord || tokenRecord.expiresAt < new Date()) {
+        throw new UnauthorizedException('Invalid refresh token');
+      }
+
+      const { accessToken, refreshToken: newRefresh } = this.generateTokens(
+        tokenRecord.user.id,
+        tokenRecord.user.email,
+      );
+      const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+
+      await tx.refreshToken.delete({ where: { id: tokenRecord.id } });
+      await tx.refreshToken.create({
+        data: { token: newRefresh, userId: tokenRecord.user.id, expiresAt },
+      });
+
+      return { accessToken, refreshToken: newRefresh };
     });
-
-    if (!tokenRecord || tokenRecord.expiresAt < new Date()) {
-      throw new UnauthorizedException('Invalid refresh token');
-    }
-
-    const { accessToken, refreshToken: newRefresh } = this.generateTokens(tokenRecord.user.id, tokenRecord.user.email);
-    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-
-    await this.prisma.refreshToken.delete({ where: { id: tokenRecord.id } });
-    await this.prisma.refreshToken.create({
-      data: { token: newRefresh, userId: tokenRecord.user.id, expiresAt },
-    });
-
-    return { accessToken, refreshToken: newRefresh };
   }
 
   async me(userId: string) {
-    const user = await this.prisma.user.findUnique({
+    return this.prisma.user.findUnique({
       where: { id: userId },
       select: {
         id: true,
@@ -119,7 +125,6 @@ export class AuthService {
         banUntil: true,
       },
     });
-    return user;
   }
 
   async logout(refreshToken: string) {
