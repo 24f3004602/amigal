@@ -145,6 +145,9 @@
     scrollbar-width: thin;
     scrollbar-color: hsl(var(--muted-foreground) / 0.3) transparent;
   }
+  .mirror {
+    transform: scaleX(-1);
+  }
   .scrollbar-thin::-webkit-scrollbar {
     width: 6px;
     height: 6px;
