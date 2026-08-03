@@ -8,4 +8,8 @@ export const api = {
     credentials: 'include',
     body: JSON.stringify(body),
   }),
+  delete: (path: string) => fetch(`${API_URL}${path}`, {
+    method: 'DELETE',
+    credentials: 'include',
+  }),
 };
