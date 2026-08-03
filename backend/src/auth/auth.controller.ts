@@ -1,48 +1,33 @@
 import { Controller, Post, Get, Body, Res, Req, UseGuards, UnauthorizedException } from '@nestjs/common';
 import { Response, Request } from 'express';
+import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
-import { AuthGuard } from '@nestjs/passport';
+import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 
 @Controller('auth')
 export class AuthController {
   constructor(private authService: AuthService) {}
 
   @Post('register')
-  async register(@Body() body: { email: string; password: string; displayName?: string }, @Res({ passthrough: true }) res: Response) {
+  @Throttle(5, 60) // 5 attempts per minute per IP
+  async register(
+    @Body() body: { email: string; password: string; displayName?: string },
+    @Res({ passthrough: true }) res: Response,
+  ) {
     const result = await this.authService.register(body.email, body.password, body.displayName);
     this.setCookies(res, result.accessToken, result.refreshToken);
     return result.user;
   }
 
   @Post('login')
-  async login(@Body() body: { email: string; password: string }, @Res({ passthrough: true }) res: Response) {
+  @Throttle(5, 60)
+  async login(
+    @Body() body: { email: string; password: string },
+    @Res({ passthrough: true }) res: Response,
+  ) {
     const result = await this.authService.login(body.email, body.password);
     this.setCookies(res, result.accessToken, result.refreshToken);
     return result.user;
-  }
-
-  @Get('google')
-  @UseGuards(AuthGuard('google'))
-  googleAuth() {}
-
-  @Get('google/callback')
-  @UseGuards(AuthGuard('google'))
-  async googleAuthCallback(@Req() req: any, @Res() res: Response) {
-    const result = await this.authService.oauthLogin(req.user);
-    this.setCookies(res, result.accessToken, result.refreshToken);
-    res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:3000'}?auth=success`);
-  }
-
-  @Get('facebook')
-  @UseGuards(AuthGuard('facebook'))
-  facebookAuth() {}
-
-  @Get('facebook/callback')
-  @UseGuards(AuthGuard('facebook'))
-  async facebookAuthCallback(@Req() req: any, @Res() res: Response) {
-    const result = await this.authService.oauthLogin(req.user);
-    this.setCookies(res, result.accessToken, result.refreshToken);
-    res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:3000'}?auth=success`);
   }
 
   @Post('refresh')
@@ -55,29 +40,44 @@ export class AuthController {
   }
 
   @Get('me')
-  async me(@Req() req: Request) {
-    const token = req.cookies?.access_token || req.headers.authorization?.replace('Bearer ', '');
-    if (!token) return null;
-    try {
-      const jwt = require('jsonwebtoken');
-      const payload = jwt.verify(token, process.env.JWT_SECRET!);
-      return this.authService.me(payload.userId);
-    } catch {
-      return null;
-    }
+  @UseGuards(JwtAuthGuard)
+  async me(@Req() req: Request & { user: { userId: string } }) {
+    return this.authService.me(req.user.userId);
   }
 
   @Post('logout')
   async logout(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
     const refreshToken = req.cookies?.refresh_token;
     if (refreshToken) await this.authService.logout(refreshToken);
-    res.clearCookie('access_token');
-    res.clearCookie('refresh_token');
+    this.clearCookies(res);
     return { success: true };
   }
 
   private setCookies(res: Response, accessToken: string, refreshToken: string) {
-    res.cookie('access_token', accessToken, { httpOnly: true, secure: true, sameSite: 'none', maxAge: 15 * 60 * 1000 });
-    res.cookie('refresh_token', refreshToken, { httpOnly: true, secure: true, sameSite: 'none', maxAge: 7 * 24 * 60 * 60 * 1000 });
+    const isProduction = process.env.NODE_ENV === 'production';
+    const sameSite = isProduction ? 'strict' : 'lax';
+
+    res.cookie('access_token', accessToken, {
+      httpOnly: true,
+      secure: isProduction,
+      sameSite,
+      maxAge: 15 * 60 * 1000,
+      path: '/',
+    });
+    res.cookie('refresh_token', refreshToken, {
+      httpOnly: true,
+      secure: isProduction,
+      sameSite,
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+      path: '/auth/refresh',
+    });
+  }
+
+  private clearCookies(res: Response) {
+    const isProduction = process.env.NODE_ENV === 'production';
+    const sameSite = isProduction ? 'strict' : 'lax';
+
+    res.clearCookie('access_token', { httpOnly: true, secure: isProduction, sameSite, path: '/' });
+    res.clearCookie('refresh_token', { httpOnly: true, secure: isProduction, sameSite, path: '/auth/refresh' });
   }
 }
