@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Body, Res, Req, UseGuards } from '@nestjs/common';
+import { Controller, Post, Get, Body, Res, Req, UseGuards, UnauthorizedException } from '@nestjs/common';
 import { Response, Request } from 'express';
 import { AuthService } from './auth.service';
 import { AuthGuard } from '@nestjs/passport';
@@ -81,5 +81,3 @@ export class AuthController {
     res.cookie('refresh_token', refreshToken, { httpOnly: true, secure: true, sameSite: 'none', maxAge: 7 * 24 * 60 * 60 * 1000 });
   }
 }
-
-import { UnauthorizedException } from '@nestjs/common';
