@@ -14,10 +14,12 @@ type Screen = 'landing' | 'auth' | 'matching' | 'chat' | 'post-chat';
 export default function Home() {
   const [screen, setScreen] = useState<Screen>('landing');
   const [user, setUser] = useState<any>(null);
+  const [mode, setMode] = useState<'text' | 'video'>('text');
   const { reset, setRoom } = useChatStore();
 
   useEffect(() => {
-    api.get('/auth/me')
+    api
+      .get('/auth/me')
       .then((res) => res.json())
       .then((data) => {
         if (data) setUser(data);
@@ -42,12 +44,13 @@ export default function Home() {
     setScreen('chat');
   };
 
-  const [mode, setMode] = useState<'text' | 'video'>('text');
-
   return (
     <main className="min-h-screen bg-gray-950 text-white">
       {screen === 'landing' && (
-        <LandingScreen onStart={() => setScreen(user ? 'matching' : 'auth')} user={user} />
+        <LandingScreen
+          onStart={() => setScreen(user ? 'matching' : 'auth')}
+          user={user}
+        />
       )}
       {screen === 'auth' && <AuthScreen onSuccess={handleAuthSuccess} />}
       {screen === 'matching' && (
