@@ -1,123 +1,107 @@
 'use client';
 
 import { useState } from 'react';
-import { useChatStore } from '@/hooks/useChatStore';
 import { api } from '@/lib/api';
-import { Star } from 'lucide-react';
+import { ThumbsUp, ThumbsDown, Flag, RotateCcw, Home, Star, MessageSquare } from 'lucide-react';
 
-export default function PostChatScreen({
-  onFindNew,
-  onGoHome,
-}: {
-  onFindNew: () => void;
+interface Props {
+  onNewChat: () => void;
   onGoHome: () => void;
-}) {
-  const { partnerName, sharedInterests, elapsed, sessionId } = useChatStore();
+}
+
+const REPORT_REASONS = ['Inappropriate behavior', 'Spam', 'Harassment', 'Underage', 'Other'];
+
+export default function PostChatScreen({ onNewChat, onGoHome }: Props) {
   const [rating, setRating] = useState(0);
-  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportReason, setReportReason] = useState('');
   const [submitted, setSubmitted] = useState(false);
 
-  const tags = ['Friendly', 'Funny', 'Interesting', 'Helpful', 'Respectful'];
-
-  const toggleTag = (tag: string) => {
-    setSelectedTags((prev) =>
-      prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]
-    );
-  };
-
   const handleSubmit = async () => {
-    if (!sessionId || rating === 0) return;
-    await api.post(`/sessions/${sessionId}/rate`, { rating, tags: selectedTags });
+    // In real app, send rating to backend
     setSubmitted(true);
-  };
-
-  const formatDuration = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}m ${secs}s`;
+    setTimeout(() => setSubmitted(false), 2000);
   };
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center px-4">
-      <div className="w-full max-w-md space-y-6 text-center">
-        <h2 className="text-2xl font-bold">Chat Ended</h2>
+    <div className="min-h-screen w-full flex items-center justify-center relative bg-black px-4">
+      <div className="fixed top-0 left-0 w-full h-full grid-bg opacity-50" />
+      <div className="fixed top-20 right-20 w-72 h-72 bg-purple-500/10 rounded-full blur-[100px] animate-float" />
 
-        <div className="rounded-2xl bg-gray-900 p-6 border border-gray-800 space-y-4">
-          <div>
-            <h3 className="font-semibold text-lg">{partnerName || 'Stranger'}</h3>
-            {sharedInterests.length > 0 && (
-              <p className="text-sm text-indigo-400">
-                Shared: {sharedInterests.map((i) => '#' + i).join(', ')}
-              </p>
-            )}
-            <p className="text-sm text-gray-500">Duration: {formatDuration(elapsed || 0)}</p>
+      <div className="relative z-10 w-full max-w-md">
+        <div className="glass-strong rounded-3xl p-8 text-center glow-cyan">
+          <div className="w-16 h-16 mx-auto mb-6 rounded-full bg-gradient-to-br from-cyan-400 to-purple-500 flex items-center justify-center">
+            <MessageSquare className="w-8 h-8 text-white" />
           </div>
 
-          {!submitted ? (
-            <>
-              <div>
-                <p className="text-sm text-gray-400 mb-2">How was your conversation?</p>
-                <div className="flex justify-center gap-2">
-                  {[1, 2, 3, 4, 5].map((star) => (
-                    <button
-                      key={star}
-                      onClick={() => setRating(star)}
-                      className={`transition ${star <= rating ? 'text-yellow-400' : 'text-gray-600'}`}
-                    >
-                      <Star className="h-8 w-8 fill-current" />
-                    </button>
-                  ))}
-                </div>
-              </div>
+          <h2 className="text-3xl font-bold text-gradient mb-2">Chat Ended</h2>
+          <p className="text-white/50 mb-8">How was your conversation?</p>
 
-              <div>
-                <p className="text-sm text-gray-400 mb-2">What made it great?</p>
-                <div className="flex flex-wrap justify-center gap-2">
-                  {tags.map((tag) => (
+          {/* Rating */}
+          <div className="flex justify-center gap-2 mb-8">
+            {[1, 2, 3, 4, 5].map((star) => (
+              <button
+                key={star}
+                onClick={() => setRating(star)}
+                className={`transition-all duration-300 hover:scale-110 ${star <= rating ? 'text-yellow-400 drop-shadow-[0_0_10px_rgba(250,204,21,0.5)]' : 'text-white/20'}`}
+              >
+                <Star className="w-8 h-8 fill-current" />
+              </button>
+            ))}
+          </div>
+
+          {/* Actions */}
+          <div className="space-y-3">
+            <button onClick={onNewChat} className="w-full btn-primary py-3.5 rounded-xl flex items-center justify-center gap-2">
+              <RotateCcw className="w-5 h-5" />
+              Find New Match
+            </button>
+            
+            <button onClick={onGoHome} className="w-full btn-secondary py-3.5 rounded-xl flex items-center justify-center gap-2">
+              <Home className="w-5 h-5" />
+              Go Home
+            </button>
+
+            {!reportOpen ? (
+              <button 
+                onClick={() => setReportOpen(true)} 
+                className="w-full py-3 text-red-400/60 hover:text-red-400 text-sm flex items-center justify-center gap-2 transition-colors"
+              >
+                <Flag className="w-4 h-4" />
+                Report User
+              </button>
+            ) : (
+              <div className="glass rounded-xl p-4 border border-red-500/20">
+                <p className="text-sm text-white/60 mb-3">Why are you reporting?</p>
+                <div className="flex flex-wrap gap-2 mb-3">
+                  {REPORT_REASONS.map((reason) => (
                     <button
-                      key={tag}
-                      onClick={() => toggleTag(tag)}
-                      className={`rounded-full px-4 py-1.5 text-sm transition ${
-                        selectedTags.includes(tag)
-                          ? 'bg-indigo-600 text-white'
-                          : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+                      key={reason}
+                      onClick={() => setReportReason(reason)}
+                      className={`px-3 py-1.5 rounded-lg text-xs transition-all ${
+                        reportReason === reason
+                          ? 'bg-red-500/20 border border-red-500/40 text-red-300'
+                          : 'bg-white/5 border border-white/10 text-white/50 hover:bg-white/10'
                       }`}
                     >
-                      {tag}
+                      {reason}
                     </button>
                   ))}
                 </div>
+                <button
+                  onClick={() => { setReportOpen(false); setReportReason(''); }}
+                  className="text-xs text-white/30 hover:text-white/60"
+                >
+                  Cancel
+                </button>
               </div>
+            )}
+          </div>
 
-              <button
-                onClick={handleSubmit}
-                disabled={rating === 0}
-                className="w-full rounded-lg bg-indigo-600 py-3 font-semibold text-white hover:bg-indigo-700 transition disabled:opacity-50"
-              >
-                Submit Rating
-              </button>
-            </>
-          ) : (
-            <div className="space-y-4">
-              <div className="rounded-lg bg-green-900/20 border border-green-800 p-4">
-                <p className="text-green-400 font-semibold">Thanks for your feedback!</p>
-              </div>
-              <button
-                onClick={onFindNew}
-                className="w-full rounded-lg bg-indigo-600 py-3 font-semibold text-white hover:bg-indigo-700"
-              >
-                Find New Match
-              </button>
-            </div>
+          {submitted && (
+            <p className="mt-4 text-sm text-green-400 animate-pulse">Thanks for your feedback!</p>
           )}
         </div>
-
-        <button
-          onClick={onGoHome}
-          className="text-gray-400 hover:text-white transition"
-        >
-          Go Home
-        </button>
       </div>
     </div>
   );
