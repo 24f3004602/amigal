@@ -8,35 +8,39 @@ datasource db {
 }
 
 model User {
-  id                String   @id @default(uuid())
-  email             String   @unique
-  passwordHash      String   @map("password_hash")
-  displayName       String?  @map("display_name")
-  avatarUrl         String?  @map("avatar_url")
-  reputationScore   Int      @default(100) @map("reputation_score")
-  totalSessions     Int      @default(0) @map("total_sessions")
-  positiveRatings   Int      @default(0) @map("positive_ratings")
-  negativeRatings   Int      @default(0) @map("negative_ratings")
-  videoChatsUsed    Int      @default(0) @map("video_chats_used")
-  videoChatsLimit   Int      @default(5) @map("video_chats_limit")
-  isBanned          Boolean  @default(false) @map("is_banned")
-  banReason         String?  @map("ban_reason")
-  banUntil          DateTime? @map("ban_until")
-  subscriptionStatus String   @default("inactive") @map("subscription_status")
-  subscriptionTier   String   @default("free") @map("subscription_tier")
-  stripeCustomerId   String?  @map("stripe_customer_id")
-  stripeSubscriptionId String? @map("stripe_subscription_id")
-  subscriptionEndsAt DateTime? @map("subscription_ends_at")
-  createdAt         DateTime @default(now()) @map("created_at")
-  lastActive        DateTime? @map("last_active")
-  updatedAt         DateTime @updatedAt @map("updated_at")
-  sessionsAsA       Session[] @relation("UserASessions")
-  sessionsAsB       Session[] @relation("UserBSessions")
-  reportsMade       Report[] @relation("Reporter")
-  reportsReceived   Report[] @relation("Reported")
-  reputationEvents  ReputationEvent[]
-  userInterests     UserInterest[]
-  refreshTokens     RefreshToken[]
+  id                   String    @id @default(uuid())
+  email                String    @unique
+  passwordHash         String?   @map("password_hash")
+  displayName          String?   @map("display_name")
+  avatarUrl            String?   @map("avatar_url")
+  provider             String?   // 'local', 'google', 'facebook'
+  providerId           String?   @map("provider_id")
+  reputationScore      Int       @default(100) @map("reputation_score")
+  totalSessions        Int       @default(0) @map("total_sessions")
+  positiveRatings      Int       @default(0) @map("positive_ratings")
+  negativeRatings      Int       @default(0) @map("negative_ratings")
+  videoChatsUsed       Int       @default(0) @map("video_chats_used")
+  videoChatsLimit      Int       @default(5) @map("video_chats_limit")
+  isBanned             Boolean   @default(false) @map("is_banned")
+  banReason            String?   @map("ban_reason")
+  banUntil             DateTime? @map("ban_until")
+  subscriptionStatus   String    @default("inactive") @map("subscription_status")
+  subscriptionTier     String    @default("free") @map("subscription_tier")
+  stripeCustomerId     String?   @map("stripe_customer_id")
+  stripeSubscriptionId String?   @map("stripe_subscription_id")
+  subscriptionEndsAt   DateTime? @map("subscription_ends_at")
+  createdAt            DateTime  @default(now()) @map("created_at")
+  lastActive           DateTime? @map("last_active")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
+
+  sessionsAsA      Session[]        @relation("UserASessions")
+  sessionsAsB      Session[]        @relation("UserBSessions")
+  reportsMade      Report[]         @relation("Reporter")
+  reportsReceived  Report[]         @relation("Reported")
+  reputationEvents ReputationEvent[]
+  userInterests    UserInterest[]
+  refreshTokens    RefreshToken[]
+
   @@map("users")
 }
 
@@ -47,46 +51,50 @@ model RefreshToken {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   expiresAt DateTime @map("expires_at")
   createdAt DateTime @default(now()) @map("created_at")
+
   @@map("refresh_tokens")
 }
 
 model Interest {
-  id          Int      @id @default(autoincrement())
-  name        String   @unique
-  category    String?
-  usageCount  Int      @default(0) @map("usage_count")
+  id           Int            @id @default(autoincrement())
+  name         String         @unique
+  category     String?
+  usageCount   Int            @default(0) @map("usage_count")
   userInterests UserInterest[]
+
   @@map("interests")
 }
 
 model UserInterest {
-  userId      String   @map("user_id")
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  interestId  Int      @map("interest_id")
-  interest    Interest @relation(fields: [interestId], references: [id], onDelete: Cascade)
+  userId     String   @map("user_id")
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  interestId Int      @map("interest_id")
+  interest   Interest @relation(fields: [interestId], references: [id], onDelete: Cascade)
+
   @@id([userId, interestId])
   @@map("user_interests")
 }
 
 model Session {
-  id                String    @id @default(uuid())
-  roomId            String    @unique @map("room_id")
-  userAId           String    @map("user_a_id")
-  userA             User      @relation("UserASessions", fields: [userAId], references: [id])
-  userBId           String    @map("user_b_id")
-  userB             User      @relation("UserBSessions", fields: [userBId], references: [id])
-  mode              String    @default("text")
-  startedAt         DateTime  @default(now()) @map("started_at")
-  endedAt           DateTime? @map("ended_at")
-  durationSeconds   Int?      @map("duration_seconds")
-  terminationReason String?   @map("termination_reason")
-  interestOverlap   Float?    @map("interest_overlap")
-  regionMatch       Boolean?  @map("region_match")
+  id                String         @id @default(uuid())
+  roomId            String         @unique @map("room_id")
+  userAId           String         @map("user_a_id")
+  userA             User           @relation("UserASessions", fields: [userAId], references: [id])
+  userBId           String         @map("user_b_id")
+  userB             User           @relation("UserBSessions", fields: [userBId], references: [id])
+  mode              String         @default("text")
+  startedAt         DateTime       @default(now()) @map("started_at")
+  endedAt           DateTime?      @map("ended_at")
+  durationSeconds   Int?           @map("duration_seconds")
+  terminationReason String?        @map("termination_reason")
+  interestOverlap   Float?         @map("interest_overlap")
+  regionMatch       Boolean?       @map("region_match")
   rating            Int?
-  ratingTags        String[]  @map("rating_tags")
+  ratingTags        String[]       @map("rating_tags")
   messages          ChatMessage[]
   reports           Report[]
   reputationEvents  ReputationEvent[]
+
   @@map("sessions")
 }
 
@@ -98,23 +106,25 @@ model ChatMessage {
   text      String
   censored  Boolean  @default(false)
   createdAt DateTime @default(now()) @map("created_at")
+
   @@map("chat_messages")
 }
 
 model Report {
-  id          String   @id @default(uuid())
-  sessionId   String   @map("session_id")
-  session     Session  @relation(fields: [sessionId], references: [id])
-  reporterId  String   @map("reporter_id")
-  reporter    User     @relation("Reporter", fields: [reporterId], references: [id])
-  reportedId  String   @map("reported_id")
-  reported    User     @relation("Reported", fields: [reportedId], references: [id])
-  reason      String
-  chatLog     String?  @map("chat_log")
-  status      String   @default("pending")
-  createdAt   DateTime @default(now()) @map("created_at")
-  reviewedAt  DateTime? @map("reviewed_at")
-  reviewedBy  String?  @map("reviewed_by")
+  id         String   @id @default(uuid())
+  sessionId  String   @map("session_id")
+  session    Session  @relation(fields: [sessionId], references: [id])
+  reporterId String   @map("reporter_id")
+  reporter   User     @relation("Reporter", fields: [reporterId], references: [id])
+  reportedId String   @map("reported_id")
+  reported   User     @relation("Reported", fields: [reportedId], references: [id])
+  reason     String
+  chatLog    String?  @map("chat_log")
+  status     String   @default("pending")
+  createdAt  DateTime @default(now()) @map("created_at")
+  reviewedAt DateTime? @map("reviewed_at")
+  reviewedBy String?  @map("reviewed_by")
+
   @@map("reports")
 }
 
@@ -127,5 +137,6 @@ model ReputationEvent {
   sessionId String?  @map("session_id")
   session   Session? @relation(fields: [sessionId], references: [id])
   createdAt DateTime @default(now()) @map("created_at")
+
   @@map("reputation_events")
 }
