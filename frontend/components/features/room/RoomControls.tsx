@@ -2,18 +2,19 @@
 
 import { Button } from '@/components/ui/Button';
 import { Tooltip } from '@/components/ui/Tooltip';
+import { Badge } from '@/components/ui/Badge';
 import {
   Mic,
   MicOff,
   Video,
   VideoOff,
   MonitorUp,
+  MonitorX,
   PhoneOff,
   MessageSquare,
-  Users,
   Settings,
   Hand,
-  MoreHorizontal,
+  PictureInPicture,
 } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
@@ -21,35 +22,40 @@ import { cn } from '@/lib/utils';
 interface RoomControlsProps {
   isMuted: boolean;
   isVideoOff: boolean;
+  isScreenSharing: boolean;
   onToggleMute: () => void;
   onToggleVideo: () => void;
   onShareScreen: () => void;
   onToggleChat: () => void;
   onEndCall: () => void;
+  onOpenDevices: () => void;
+  chatUnread?: number;
   participantCount?: number;
 }
 
 export function RoomControls({
   isMuted,
   isVideoOff,
+  isScreenSharing,
   onToggleMute,
   onToggleVideo,
   onShareScreen,
   onToggleChat,
   onEndCall,
+  onOpenDevices,
+  chatUnread = 0,
   participantCount = 2,
 }: RoomControlsProps) {
   const [raisedHand, setRaisedHand] = useState(false);
 
   return (
-    <div className="flex items-center justify-center gap-2 sm:gap-3 p-4">
-      <div className="flex items-center gap-2 rounded-2xl glass-strong px-4 py-2.5">
+    <div className="flex items-center justify-center gap-2 sm:gap-3 p-4 border-t border-border bg-background/80 backdrop-blur-xl">
+      <div className="flex items-center gap-2 rounded-2xl glass px-4 py-2">
         <Tooltip content={isMuted ? 'Unmute (M)' : 'Mute (M)'}>
           <Button
             variant={isMuted ? 'destructive' : 'ghost'}
             size="icon"
             onClick={onToggleMute}
-            aria-label={isMuted ? 'Unmute microphone' : 'Mute microphone'}
             className={cn('rounded-full', !isMuted && 'hover:bg-muted')}
           >
             {isMuted ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
@@ -61,16 +67,20 @@ export function RoomControls({
             variant={isVideoOff ? 'destructive' : 'ghost'}
             size="icon"
             onClick={onToggleVideo}
-            aria-label={isVideoOff ? 'Start camera' : 'Stop camera'}
             className={cn('rounded-full', !isVideoOff && 'hover:bg-muted')}
           >
             {isVideoOff ? <VideoOff className="h-5 w-5" /> : <Video className="h-5 w-5" />}
           </Button>
         </Tooltip>
 
-        <Tooltip content="Share screen">
-          <Button variant="ghost" size="icon" onClick={onShareScreen} aria-label="Share screen" className="rounded-full">
-            <MonitorUp className="h-5 w-5" />
+        <Tooltip content={isScreenSharing ? 'Stop sharing' : 'Share screen'}>
+          <Button
+            variant={isScreenSharing ? 'secondary' : 'ghost'}
+            size="icon"
+            onClick={onShareScreen}
+            className="rounded-full"
+          >
+            {isScreenSharing ? <MonitorX className="h-5 w-5" /> : <MonitorUp className="h-5 w-5" />}
           </Button>
         </Tooltip>
 
@@ -81,31 +91,26 @@ export function RoomControls({
             variant={raisedHand ? 'secondary' : 'ghost'}
             size="icon"
             onClick={() => setRaisedHand(!raisedHand)}
-            aria-label="Raise hand"
             className="rounded-full"
           >
             <Hand className={cn('h-5 w-5', raisedHand && 'text-warning')} />
           </Button>
         </Tooltip>
 
-        <Tooltip content="Participants">
-          <Button variant="ghost" size="icon" className="relative rounded-full">
-            <Users className="h-5 w-5" />
-            <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground">
-              {participantCount}
-            </span>
+        <Tooltip content="Device settings">
+          <Button variant="ghost" size="icon" onClick={onOpenDevices} className="rounded-full">
+            <Settings className="h-5 w-5" />
           </Button>
         </Tooltip>
 
         <Tooltip content="Chat">
-          <Button variant="ghost" size="icon" onClick={onToggleChat} aria-label="Open chat" className="rounded-full">
+          <Button variant="ghost" size="icon" onClick={onToggleChat} className="relative rounded-full">
             <MessageSquare className="h-5 w-5" />
-          </Button>
-        </Tooltip>
-
-        <Tooltip content="Settings">
-          <Button variant="ghost" size="icon" aria-label="Settings" className="rounded-full">
-            <Settings className="h-5 w-5" />
+            {chatUnread > 0 && (
+              <Badge className="absolute -top-1 -right-1 h-5 w-5 p-0 flex items-center justify-center text-[10px]">
+                {chatUnread}
+              </Badge>
+            )}
           </Button>
         </Tooltip>
       </div>
@@ -115,7 +120,6 @@ export function RoomControls({
         size="icon"
         className="rounded-full h-12 w-12 shadow-lg hover:shadow-destructive/30 hover:scale-105 transition-all"
         onClick={onEndCall}
-        aria-label="End call"
       >
         <PhoneOff className="h-5 w-5" />
       </Button>
