@@ -66,7 +66,7 @@ export class MatchingService {
         const roomId = uuidv4();
         const candidateKey = `match:user:${candidateId}`;
         try {
-          const result = await (redis as any).atomicMatch(
+          const result = await (this.redis.getClient() as any).atomicMatch(
             queueKey, userKey, candidateKey,
             userId, candidateId, roomId, timestamp
           );
