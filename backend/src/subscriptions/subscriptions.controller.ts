@@ -1,4 +1,5 @@
 import { Controller, Post, Get, Body, Headers, Req, UseGuards } from '@nestjs/common';
+import { Request } from 'express';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { SubscriptionsService } from './subscriptions.service';
 
@@ -15,9 +16,9 @@ export class SubscriptionsController {
   @Post('webhook')
   async webhook(
     @Headers('stripe-signature') signature: string,
-    @Body() body: Buffer,
+    @Req() req: Request,
   ) {
-    return this.subscriptionsService.handleWebhook(signature, body);
+    return this.subscriptionsService.handleWebhook(signature, req.body);
   }
 
   @Get('plans')
