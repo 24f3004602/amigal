@@ -5,6 +5,8 @@ import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
 import * as express from 'express';
 import { Logger } from 'nestjs-pino';
+import { IoAdapter } from '@nestjs/platform-socket.io';
+import { createAdapter } from '@socket.io/redis-adapter';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { bufferLogs: true });
@@ -65,6 +67,20 @@ async function bootstrap() {
     }),
   );
 
+
+// In bootstrap(), before app.listen():
+const redisService = app.get(RedisService);
+const pubClient = redisService.getClient().duplicate();
+const subClient = redisService.getClient().duplicate();
+
+const ioAdapter = new IoAdapter(app);
+(ioAdapter as any).createIOServer = (port: number, options?: any) => {
+  const server = require('socket.io')(port, options);
+  server.adapter(createAdapter(pubClient, subClient));
+  return server;
+};
+
+app.useWebSocketAdapter(ioAdapter);
   await app.listen(process.env.PORT || 4000);
   console.log(`Backend running on port ${process.env.PORT || 4000}`);
 }
