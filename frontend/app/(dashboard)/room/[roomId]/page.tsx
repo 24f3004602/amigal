@@ -1,19 +1,26 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useSocket } from '@/hooks/useSocket';
 import { useWebRTC } from '@/hooks/useWebRTC';
 import { useMediaDevices } from '@/hooks/useMediaDevices';
-import { AppShell } from '@/components/layout/AppShell';
+import { useRoomStore } from '@/stores/room.store';
+import { useAuth } from '@/hooks/useAuth';
 import { VideoGrid } from '@/components/features/room/VideoGrid';
 import { ChatPanel } from '@/components/features/room/ChatPanel';
 import { RoomControls } from '@/components/features/room/RoomControls';
 import { ConnectionBadge } from '@/components/features/room/ConnectionBadge';
 import { DeviceSelector } from '@/components/features/room/DeviceSelector';
+import { WaitingRoom } from '@/components/features/room/WaitingRoom';
+import { HostControls } from '@/components/features/room/HostControls';
+import { LiveReactions } from '@/components/features/room/LiveReactions';
+import { PollDisplay } from '@/components/features/room/PollDisplay';
+import { PollCreator } from '@/components/features/room/PollCreator';
+import { Whiteboard } from '@/components/features/room/Whiteboard';
 import { useToast } from '@/components/ui/Toast';
-import { useRoomStore } from '@/stores/room.store';
 import { motion, AnimatePresence } from 'framer-motion';
+import { Radio, BarChart3, Paintbrush } from 'lucide-react';
 
 export default function RoomPage() {
   const params = useParams();
@@ -21,11 +28,25 @@ export default function RoomPage() {
   const roomId = params.roomId as string;
   const socket = useSocket();
   const { toast } = useToast();
-  const { mode } = useRoomStore();
+  const { user } = useAuth();
+  const {
+    status,
+    mode,
+    participants,
+    isRecording,
+    layout,
+    spotlightUserId,
+    setRoom,
+    addParticipant,
+    setStatus,
+    setSpotlight,
+  } = useRoomStore();
+
   const [showChat, setShowChat] = useState(mode === 'text');
   const [showDevices, setShowDevices] = useState(false);
+  const [showPollCreator, setShowPollCreator] = useState(false);
+  const [showWhiteboard, setShowWhiteboard] = useState(false);
   const [chatUnread, setChatUnread] = useState(0);
-  const videoContainerRef = useRef<HTMLDivElement>(null);
 
   const {
     selectedCamera,
@@ -36,7 +57,6 @@ export default function RoomPage() {
     localStream,
     remoteStream,
     connectionState,
-    iceConnectionState,
     quality,
     isMuted,
     isVideoOff,
@@ -48,7 +68,6 @@ export default function RoomPage() {
     stopScreenShare,
     switchCamera,
     switchMicrophone,
-    togglePictureInPicture,
     endCall,
   } = useWebRTC(roomId, mode, socket, {
     video: selectedCamera,
@@ -56,9 +75,17 @@ export default function RoomPage() {
   });
 
   useEffect(() => {
-    if (!socket || !roomId) return;
+    setRoom(roomId, mode);
+    setStatus('waiting');
 
+    if (!socket || !roomId) return;
     socket.emit('join-room', { roomId });
+
+    // Simulate host joining first
+    setTimeout(() => {
+      setStatus('active');
+    }, 1500);
+
     setupPeerConnection(true);
 
     socket.on('call-ended', () => {
@@ -67,13 +94,8 @@ export default function RoomPage() {
       router.push('/match');
     });
 
-    socket.on('error', (err: any) => {
-      toast.error(err.message || 'Connection error');
-    });
-
     return () => {
       socket.off('call-ended');
-      socket.off('error');
       endCall();
     };
   }, [socket, roomId]);
@@ -94,37 +116,84 @@ export default function RoomPage() {
 
   return (
     <div className="flex h-screen flex-col bg-background overflow-hidden">
+      {/* Recording indicator */}
+      <AnimatePresence>
+        {isRecording && (
+          <motion.div
+            initial={{ y: -40 }}
+            animate={{ y: 0 }}
+            exit={{ y: -40 }}
+            className="flex h-8 items-center justify-center gap-2 bg-destructive/90 text-destructive-foreground text-xs font-medium"
+          >
+            <Radio className="h-3 w-3 animate-pulse" />
+            Recording in progress
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Top Bar */}
-      <div className="flex h-14 items-center justify-between border-b border-border px-4 glass">
+      <div className="flex h-14 items-center justify-between border-b border-border px-4 glass shrink-0">
         <div className="flex items-center gap-3">
           <h1 className="text-sm font-semibold">Room: {roomId.slice(0, 8)}</h1>
           <ConnectionBadge quality={quality} />
+          {participants.length > 0 && (
+            <span className="text-xs text-muted-foreground">{participants.length} participants</span>
+          )}
         </div>
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          {quality.bitrate > 0 && <span>{quality.bitrate} kbps</span>}
-          {quality.fps > 0 && <span>· {quality.fps} fps</span>}
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowPollCreator(true)}
+            className="rounded-lg p-2 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+            title="Create poll"
+          >
+            <BarChart3 className="h-4 w-4" />
+          </button>
+          <button
+            onClick={() => setShowWhiteboard(true)}
+            className="rounded-lg p-2 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+            title="Open whiteboard"
+          >
+            <Paintbrush className="h-4 w-4" />
+          </button>
         </div>
       </div>
 
-      {/* Main Content */}
-      <div className="flex flex-1 overflow-hidden">
+      {/* Main */}
+      <div className="relative flex flex-1 overflow-hidden">
+        <HostControls />
+        <LiveReactions />
+
+        {/* Waiting Room Overlay */}
+        <WaitingRoom />
+
+        {/* Poll Display */}
+        <PollDisplay />
+
+        {/* Poll Creator Modal */}
+        <AnimatePresence>
+          {showPollCreator && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+              <PollCreator onClose={() => setShowPollCreator(false)} />
+            </div>
+          )}
+        </AnimatePresence>
+
+        {/* Whiteboard */}
+        <AnimatePresence>
+          {showWhiteboard && <Whiteboard onClose={() => setShowWhiteboard(false)} />}
+        </AnimatePresence>
+
         {/* Video Area */}
-        <div ref={videoContainerRef} className="relative flex-1 p-4">
+        <div className="relative flex-1 p-4">
           <VideoGrid
             localStream={localStream}
             remoteStream={remoteStream}
             connectionState={connectionState}
             isMuted={isMuted}
             isVideoOff={isVideoOff}
+            layout={layout}
+            spotlightUserId={spotlightUserId}
           />
-
-          {/* Floating device selector trigger */}
-          <button
-            onClick={() => setShowDevices(true)}
-            className="absolute top-6 right-6 rounded-full glass px-3 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
-          >
-            ⚙ Devices
-          </button>
         </div>
 
         {/* Chat Sidebar */}
@@ -159,9 +228,10 @@ export default function RoomPage() {
         }}
         chatUnread={chatUnread}
         onOpenDevices={() => setShowDevices(true)}
+        onTogglePoll={() => setShowPollCreator(true)}
+        onToggleWhiteboard={() => setShowWhiteboard(true)}
       />
 
-      {/* Modals */}
       <DeviceSelector
         open={showDevices}
         onClose={() => setShowDevices(false)}
