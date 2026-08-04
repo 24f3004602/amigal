@@ -3,12 +3,12 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# Install dependencies first (better caching)
-COPY package*.json ./
-COPY prisma ./prisma/
-RUN npm ci
+# Install dependencies
+COPY package.json ./
+RUN npm install
 
-# Generate Prisma client
+# Copy Prisma schema (path corrected to src/prisma)
+COPY src/prisma ./prisma/
 RUN npx prisma generate
 
 # Copy source and build
@@ -23,17 +23,14 @@ FROM node:20-alpine AS production
 
 WORKDIR /app
 
-# Security: Run as non-root
 RUN addgroup -g 1001 -S nodejs && \
     adduser -S nodejs -u 1001
 
-# Install only production dependencies
 COPY --from=builder --chown=nodejs:nodejs /app/node_modules ./node_modules
 COPY --from=builder --chown=nodejs:nodejs /app/dist ./dist
 COPY --from=builder --chown=nodejs:nodejs /app/prisma ./prisma
-COPY --from=builder --chown=nodejs:nodejs /app/package*.json ./
+COPY --from=builder --chown=nodejs:nodejs /app/package.json ./
 
-# Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
     CMD wget --no-verbose --tries=1 --spider http://localhost:4000/health/liveness || exit 1
 
