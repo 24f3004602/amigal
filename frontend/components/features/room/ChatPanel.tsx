@@ -1,137 +1,153 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
-import { Avatar } from '@/components/ui/Avatar';
-import { useToast } from '@/components/ui/Toast';
-import { Send, Smile, Paperclip, MoreVertical } from 'lucide-react';
+import { useChatStore } from '@/stores/chat.store';
+import { useAuth } from '@/hooks/useAuth';
+import { ChatMessageItem } from '@/components/features/chat/ChatMessageItem';
+import { MessageInput } from '@/components/features/chat/MessageInput';
+import { TypingIndicator } from '@/components/features/chat/TypingIndicator';
+import { ThreadPanel } from '@/components/features/chat/ThreadPanel';
+import { ChatSearch } from '@/components/features/chat/ChatSearch';
+import { useSocket } from '@/hooks/useSocket';
+import { Search, MoreVertical, Bell, BellOff } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-interface Message {
-  id: string;
-  text: string;
-  sender: 'me' | 'partner';
-  timestamp: number;
+interface ChatPanelProps {
+  roomId: string;
+  onNewMessage?: () => void;
 }
 
-export function ChatPanel({ roomId }: { roomId: string }) {
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [input, setInput] = useState('');
-  const [isTyping, setIsTyping] = useState(false);
+export function ChatPanel({ roomId, onNewMessage }: ChatPanelProps) {
+  const socket = useSocket();
+  const { user } = useAuth();
   const scrollRef = useRef<HTMLDivElement>(null);
-  const { toast } = useToast();
+  const [showSearch, setShowSearch] = useState(false);
+  const [editingMessage, setEditingMessage] = useState<{ id: string; text: string } | null>(null);
+  const [replyTo, setReplyTo] = useState<string | null>(null);
+  const [muted, setMuted] = useState(false);
 
+  const messages = useChatStore((s) => s.messages[roomId] || []);
+  const activeThread = useChatStore((s) => s.activeThread);
+  const unreadCount = useChatStore((s) => s.unreadCounts[roomId] || 0);
+  const { markRead } = useChatStore();
+
+  // Auto-scroll
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
-  }, [messages, isTyping]);
+  }, [messages.length]);
 
-  const send = () => {
-    if (!input.trim()) return;
-    const msg: Message = {
-      id: Math.random().toString(36).slice(2),
-      text: input.trim(),
-      sender: 'me',
-      timestamp: Date.now(),
+  // Mark read on mount
+  useEffect(() => {
+    const ids = messages.filter((m) => !m.readBy.includes(user?.id || '')).map((m) => m.id);
+    if (ids.length) markRead(roomId, user?.id || '', ids);
+  }, [roomId, user?.id, messages, markRead]);
+
+  // Socket listeners
+  useEffect(() => {
+    if (!socket) return;
+
+    socket.on('chat-message', (msg: any) => {
+      useChatStore.getState().addMessage(roomId, msg);
+      onNewMessage?.();
+      if (!muted) {
+        // Play subtle notification sound
+        const audio = new Audio('/sounds/message.mp3');
+        audio.volume = 0.3;
+        audio.play().catch(() => {});
+      }
+    });
+
+    socket.on('typing', ({ name }: any) => {
+      useChatStore.getState().setTyping(roomId, { userId: name, name, timestamp: Date.now() });
+    });
+
+    socket.on('stop-typing', ({ name }: any) => {
+      useChatStore.getState().clearTyping(roomId, name);
+    });
+
+    return () => {
+      socket.off('chat-message');
+      socket.off('typing');
+      socket.off('stop-typing');
     };
-    setMessages((prev) => [...prev, msg]);
-    setInput('');
-    // Simulate partner typing then reply
-    setTimeout(() => setIsTyping(true), 500);
-    setTimeout(() => {
-      setIsTyping(false);
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: Math.random().toString(36).slice(2),
-          text: 'Thanks for the message! This is a demo reply.',
-          sender: 'partner',
-          timestamp: Date.now(),
-        },
-      ]);
-    }, 2500);
+  }, [socket, roomId, muted, onNewMessage]);
+
+  const handleReply = (messageId: string) => {
+    setReplyTo(messageId);
+    setEditingMessage(null);
+  };
+
+  const handleEdit = (messageId: string, currentText: string) => {
+    setEditingMessage({ id: messageId, text: currentText });
+    setReplyTo(null);
   };
 
   return (
-    <div className="flex h-full flex-col glass-strong rounded-2xl overflow-hidden">
+    <div className="flex h-full flex-col glass-strong rounded-2xl overflow-hidden relative">
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-border px-4 py-3">
+      <div className="flex items-center justify-between border-b border-border px-4 py-3 shrink-0">
         <div className="flex items-center gap-2">
           <h3 className="font-semibold text-sm">Chat</h3>
-          <span className="text-xs text-muted-foreground">({messages.length})</span>
+          {unreadCount > 0 && (
+            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground">
+              {unreadCount}
+            </span>
+          )}
         </div>
-        <Button variant="ghost" size="icon-sm" aria-label="Chat options">
-          <MoreVertical className="h-4 w-4" />
-        </Button>
+        <div className="flex items-center gap-1">
+          <Button variant="ghost" size="icon-sm" onClick={() => setMuted(!muted)} title={muted ? 'Unmute notifications' : 'Mute notifications'}>
+            {muted ? <BellOff className="h-4 w-4" /> : <Bell className="h-4 w-4" />}
+          </Button>
+          <Button variant="ghost" size="icon-sm" onClick={() => setShowSearch(!showSearch)} title="Search messages">
+            <Search className="h-4 w-4" />
+          </Button>
+          <Button variant="ghost" size="icon-sm" title="Chat options">
+            <MoreVertical className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
 
+      {/* Search overlay */}
+      <AnimatePresence>
+        {showSearch && <ChatSearch roomId={roomId} onClose={() => setShowSearch(false)} />}
+      </AnimatePresence>
+
       {/* Messages */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-thin">
-        <AnimatePresence initial={false}>
-          {messages.map((msg) => (
-            <motion.div
-              key={msg.id}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className={cn('flex gap-3', msg.sender === 'me' ? 'flex-row-reverse' : 'flex-row')}
-            >
-              <Avatar fallback={msg.sender === 'me' ? 'You' : 'P'} size="sm" />
-              <div className={cn(
-                'max-w-[75%] rounded-2xl px-4 py-2.5 text-sm',
-                msg.sender === 'me'
-                  ? 'bg-primary text-primary-foreground rounded-br-md'
-                  : 'bg-muted text-foreground rounded-bl-md'
-              )}>
-                <p>{msg.text}</p>
-                <span className="mt-1 block text-[10px] opacity-70">
-                  {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                </span>
-              </div>
-            </motion.div>
-          ))}
-        </AnimatePresence>
-
-        {isTyping && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex gap-2 pl-1">
-            <Avatar fallback="P" size="sm" />
-            <div className="flex items-center gap-1 rounded-2xl bg-muted px-4 py-3">
-              <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-muted-foreground" style={{ animationDelay: '0ms' }} />
-              <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-muted-foreground" style={{ animationDelay: '150ms' }} />
-              <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-muted-foreground" style={{ animationDelay: '300ms' }} />
-            </div>
-          </motion.div>
-        )}
-
-        {messages.length === 0 && (
+      <div ref={scrollRef} className="flex-1 overflow-y-auto p-2 space-y-1 scrollbar-thin">
+        {messages.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center text-center text-muted-foreground py-12">
             <p className="text-sm">No messages yet</p>
             <p className="text-xs mt-1">Say hello to start the conversation</p>
           </div>
+        ) : (
+          messages.map((msg) => (
+            <ChatMessageItem
+              key={msg.id}
+              message={msg}
+              roomId={roomId}
+              onReply={handleReply}
+              onEdit={handleEdit}
+            />
+          ))
         )}
+        <TypingIndicator roomId={roomId} />
       </div>
 
       {/* Input */}
-      <div className="border-t border-border p-3">
-        <div className="flex items-center gap-2">
-          <Button variant="ghost" size="icon-sm" aria-label="Add attachment">
-            <Paperclip className="h-4 w-4" />
-          </Button>
-          <Input
-            placeholder="Type a message..."
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && send()}
-            className="flex-1"
-          />
-          <Button variant="ghost" size="icon-sm" aria-label="Add emoji">
-            <Smile className="h-4 w-4" />
-          </Button>
-          <Button size="icon-sm" onClick={send} disabled={!input.trim()} aria-label="Send message">
-            <Send className="h-4 w-4" />
-          </Button>
-        </div>
-      </div>
+      <MessageInput
+        roomId={roomId}
+        replyTo={replyTo}
+        onCancelReply={() => setReplyTo(null)}
+        editingMessage={editingMessage}
+        onCancelEdit={() => setEditingMessage(null)}
+      />
+
+      {/* Thread panel */}
+      <AnimatePresence>
+        {activeThread && <ThreadPanel roomId={roomId} />}
+      </AnimatePresence>
     </div>
   );
 }
