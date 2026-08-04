@@ -7,156 +7,179 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model User {
-  id                   String    @id @default(uuid())
-  email                String    @unique
-  passwordHash         String?   @map("password_hash")
-  displayName          String?   @map("display_name")
-  avatarUrl            String?   @map("avatar_url")
-  provider             String?   // 'local', 'google', 'facebook'
-  providerId           String?   @map("provider_id")
-  reputationScore      Int       @default(100) @map("reputation_score")
-  totalSessions        Int       @default(0) @map("total_sessions")
-  positiveRatings      Int       @default(0) @map("positive_ratings")
-  negativeRatings      Int       @default(0) @map("negative_ratings")
-  videoChatsUsed       Int       @default(0) @map("video_chats_used")
-  videoChatsLimit      Int       @default(5) @map("video_chats_limit")
-  isBanned             Boolean   @default(false) @map("is_banned")
-  banReason            String?   @map("ban_reason")
-  banUntil             DateTime? @map("ban_until")
-  subscriptionStatus   String    @default("inactive") @map("subscription_status")
-  subscriptionTier     String    @default("free") @map("subscription_tier")
-  stripeCustomerId     String?   @map("stripe_customer_id")
-  stripeSubscriptionId String?   @map("stripe_subscription_id")
-  subscriptionEndsAt   DateTime? @map("subscription_ends_at")
-  createdAt            DateTime  @default(now()) @map("created_at")
-  lastActive           DateTime? @map("last_active")
-  updatedAt            DateTime  @updatedAt @map("updated_at")
+// ==================== CORE ====================
 
-  sessionsAsA      Session[]        @relation("UserASessions")
-  sessionsAsB      Session[]        @relation("UserBSessions")
-  reportsMade      Report[]         @relation("Reporter")
-  reportsReceived  Report[]         @relation("Reported")
-  reputationEvents ReputationEvent[]
-  userInterests    UserInterest[]
-  refreshTokens    RefreshToken[]
+model User {
+  id                String   @id @default(uuid())
+  email             String   @unique
+  passwordHash      String?
+  displayName       String?
+  avatarUrl         String?
+  provider          String   @default("local")
+  providerId        String?
+  reputationScore   Int      @default(100)
+  subscriptionTier  String   @default("free")
+  videoChatsUsed    Int      @default(0)
+  videoChatsLimit   Int      @default(5)
+  isBanned          Boolean  @default(false)
+  banUntil          DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  deletedAt         DateTime?
+
+  sessions          Session[]
+  refreshTokens     RefreshToken[]
+  reportsMade       Report[] @relation("Reporter")
+  reportsReceived   Report[] @relation("Reported")
+  reputationEvents  ReputationEvent[]
+  interests         UserInterest[]
 
   @@index([email])
   @@index([provider, providerId])
   @@index([isBanned])
   @@index([subscriptionTier])
+  @@index([createdAt])
+  @@index([deletedAt])
   @@map("users")
 }
 
-model RefreshToken {
-  id        String   @id @default(uuid())
-  token     String   @unique
-  userId    String   @map("user_id")
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  expiresAt DateTime @map("expires_at")
-  createdAt DateTime @default(now()) @map("created_at")
-
-  @@index([token])
-  @@index([userId])
-  @@index([expiresAt])
-  @@map("refresh_tokens")
-}
-
-model Interest {
-  id           Int            @id @default(autoincrement())
-  name         String         @unique
-  category     String?
-  usageCount   Int            @default(0) @map("usage_count")
-  userInterests UserInterest[]
-
-  @@map("interests")
-}
-
-model UserInterest {
-  userId     String   @map("user_id")
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  interestId Int      @map("interest_id")
-  interest   Interest @relation(fields: [interestId], references: [id], onDelete: Cascade)
-
-  @@id([userId, interestId])
-  @@map("user_interests")
-}
-
 model Session {
-  id                String         @id @default(uuid())
-  roomId            String         @unique @map("room_id")
-  userAId           String         @map("user_a_id")
-  userA             User           @relation("UserASessions", fields: [userAId], references: [id])
-  userBId           String         @map("user_b_id")
-  userB             User           @relation("UserBSessions", fields: [userBId], references: [id])
-  mode              String         @default("text")
-  startedAt         DateTime       @default(now()) @map("started_at")
-  endedAt           DateTime?      @map("ended_at")
-  durationSeconds   Int?           @map("duration_seconds")
-  terminationReason String?        @map("termination_reason")
-  interestOverlap   Float?         @map("interest_overlap")
-  regionMatch       Boolean?       @map("region_match")
-  rating            Int?
-  ratingTags        String[]       @map("rating_tags")
+  id                String   @id @default(uuid())
+  roomId            String   @unique
+  userAId           String
+  userBId           String
+  mode              String
+  startedAt         DateTime @default(now())
+  endedAt           DateTime?
+  terminationReason String?
+  createdAt         DateTime @default(now())
+
+  userA             User     @relation(fields: [userAId], references: [id])
+  userB             User     @relation(fields: [userBId], references: [id])
   messages          ChatMessage[]
   reports           Report[]
-  reputationEvents  ReputationEvent[]
 
   @@index([roomId])
   @@index([userAId])
   @@index([userBId])
   @@index([endedAt])
   @@index([startedAt])
+  @@index([createdAt])
   @@map("sessions")
 }
 
 model ChatMessage {
-  id        String   @id @default(uuid())
-  sessionId String   @map("session_id")
-  session   Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  senderId  String   @map("sender_id")
-  text      String
-  censored  Boolean  @default(false)
-  createdAt DateTime @default(now()) @map("created_at")
+  id          String   @id @default(uuid())
+  sessionId   String
+  senderId    String
+  text        String   @db.VarChar(2000)
+  type        String   @default("text")
+  censored    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  deletedAt   DateTime?
+
+  session     Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 
   @@index([sessionId, createdAt])
   @@index([senderId])
+  @@index([createdAt])
+  @@index([deletedAt])
   @@map("chat_messages")
 }
 
+// ==================== AUTH ====================
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  revokedAt DateTime?
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([userId])
+  @@index([expiresAt])
+  @@index([revokedAt])
+  @@map("refresh_tokens")
+}
+
+// ==================== MODERATION ====================
+
 model Report {
-  id         String   @id @default(uuid())
-  sessionId  String   @map("session_id")
-  session    Session  @relation(fields: [sessionId], references: [id])
-  reporterId String   @map("reporter_id")
-  reporter   User     @relation("Reporter", fields: [reporterId], references: [id])
-  reportedId String   @map("reported_id")
-  reported   User     @relation("Reported", fields: [reportedId], references: [id])
-  reason     String
-  chatLog    String?  @map("chat_log")
-  status     String   @default("pending")
-  createdAt  DateTime @default(now()) @map("created_at")
-  reviewedAt DateTime? @map("reviewed_at")
-  reviewedBy String?  @map("reviewed_by")
+  id          String   @id @default(uuid())
+  sessionId   String
+  reporterId  String
+  reportedId  String
+  reason      String
+  description String?  @db.VarChar(1000)
+  status      String   @default("pending")
+  createdAt   DateTime @default(now())
+  resolvedAt  DateTime?
+  resolution  String?
+
+  session     Session  @relation(fields: [sessionId], references: [id])
+  reporter    User     @relation("Reporter", fields: [reporterId], references: [id])
+  reported    User     @relation("Reported", fields: [reportedId], references: [id])
 
   @@index([sessionId])
   @@index([reporterId])
+  @@index([reportedId])
   @@index([status])
+  @@index([createdAt])
   @@map("reports")
 }
 
 model ReputationEvent {
-  id        String   @id @default(uuid())
-  userId    String   @map("user_id")
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  change    Int
-  reason    String
-  sessionId String?  @map("session_id")
-  session   Session? @relation(fields: [sessionId], references: [id])
-  createdAt DateTime @default(now()) @map("created_at")
+  id          String   @id @default(uuid())
+  userId      String
+  type        String
+  points      Int
+  description String?
+  createdAt   DateTime @default(now())
 
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([type])
+  @@index([createdAt])
   @@map("reputation_events")
 }
+
+// ==================== INTERESTS ====================
+
+model Interest {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  category    String?
+  createdAt   DateTime @default(now())
+
+  users       UserInterest[]
+
+  @@index([name])
+  @@index([category])
+  @@map("interests")
+}
+
+model UserInterest {
+  id          String   @id @default(uuid())
+  userId      String
+  interestId  String
+  createdAt   DateTime @default(now())
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  interest    Interest @relation(fields: [interestId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, interestId])
+  @@index([userId])
+  @@index([interestId])
+  @@map("user_interests")
+}
+
+// ==================== AUDIT & COMPLIANCE ====================
 
 model AuditLog {
   id          String   @id @default(uuid())
