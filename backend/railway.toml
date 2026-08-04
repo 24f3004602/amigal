@@ -1,9 +1,9 @@
 [build]
-builder = "dockerfile"
-dockerfilePath = "Dockerfile"
+builder = "nixpacks"
+buildCommand = "npm run prisma:generate && npm run build"
 
 [deploy]
-startCommand = "node dist/main"
+startCommand = "npm run db:setup && npm start"
 healthcheckPath = "/health"
 healthcheckTimeout = 30
 restartPolicyType = "on_failure"
