@@ -3,12 +3,16 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-COPY package*.json ./
-RUN npm ci
+# Copy package files (no lockfile in workspace sub-package, use npm install)
+COPY package.json ./
+RUN npm install
 
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm run build
+
+# Remove dev dependencies
+RUN npm prune --production
 
 # ============ PRODUCTION STAGE ============
 FROM node:20-alpine AS production
@@ -21,7 +25,6 @@ ENV NEXT_TELEMETRY_DISABLED=1
 RUN addgroup -g 1001 -S nodejs && \
     adduser -S nextjs -u 1001
 
-# Only copy necessary files
 COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
