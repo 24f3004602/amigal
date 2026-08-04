@@ -2,42 +2,37 @@ const CACHE_NAME = 'amigal-v1';
 const STATIC_ASSETS = [
   '/',
   '/login',
+  '/register',
   '/match',
   '/manifest.json',
   '/icons/icon-192x192.png',
   '/icons/icon-512x512.png',
 ];
 
-// Install: Cache static assets
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(STATIC_ASSETS);
-    })
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(STATIC_ASSETS))
   );
   self.skipWaiting();
 });
 
-// Activate: Clean old caches
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
+    caches.keys().then((cacheNames) =>
+      Promise.all(
         cacheNames
           .filter((name) => name !== CACHE_NAME)
           .map((name) => caches.delete(name))
-      );
-    })
+      )
+    )
   );
   self.clients.claim();
 });
 
-// Fetch: Cache-first for static, network-first for API
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);
 
-  // API requests: network first, cache fallback
   if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/v1/')) {
     event.respondWith(
       fetch(request)
@@ -51,30 +46,30 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Static assets: cache first
   if (request.destination === 'image' || request.destination === 'font') {
     event.respondWith(
-      caches.match(request).then((response) => {
-        return (
+      caches.match(request).then(
+        (response) =>
           response ||
           fetch(request).then((fetchResponse) => {
             const clone = fetchResponse.clone();
             caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
             return fetchResponse;
           })
-        );
-      })
+      )
     );
     return;
   }
 
-  // Default: network first
-  event.respondWith(
-    fetch(request).catch(() => caches.match(request))
-  );
+  event.respondWith(fetch(request).catch(() => caches.match(request)));
 });
 
-// Background sync for messages sent offline
+self.addEventListener('message', (event) => {
+  if (event.data?.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
+});
+
 self.addEventListener('sync', (event) => {
   if (event.tag === 'send-messages') {
     event.waitUntil(sendPendingMessages());
@@ -83,8 +78,10 @@ self.addEventListener('sync', (event) => {
 
 async function sendPendingMessages() {
   const db = await openDB('amigal-offline', 1);
-  const messages = await db.getAll('pendingMessages');
-  
+  const tx = db.transaction('pendingMessages', 'readonly');
+  const store = tx.objectStore('pendingMessages');
+  const messages = await store.getAll();
+
   for (const msg of messages) {
     try {
       await fetch('/v1/chat/send', {
@@ -92,14 +89,14 @@ async function sendPendingMessages() {
         body: JSON.stringify(msg),
         headers: { 'Content-Type': 'application/json' },
       });
-      await db.delete('pendingMessages', msg.id);
+      const delTx = db.transaction('pendingMessages', 'readwrite');
+      await delTx.objectStore('pendingMessages').delete(msg.id);
     } catch (err) {
       console.error('Failed to sync message:', err);
     }
   }
 }
 
-// IndexedDB helper
 function openDB(name, version) {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(name, version);
