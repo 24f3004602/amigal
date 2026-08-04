@@ -5,36 +5,45 @@ import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
 import * as express from 'express';
 import { Logger } from 'nestjs-pino';
-import { IoAdapter } from '@nestjs/platform-socket.io';
-import { createAdapter } from '@socket.io/redis-adapter';
+import { CspInterceptor } from './common/interceptors/csp.interceptor';
+import { SanitizePipe } from './common/pipes/sanitize.pipe';
+import { CustomThrottlerGuard } from './common/guards/throttler.guard';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { bufferLogs: true });
   app.useLogger(app.get(Logger));
 
-  // Security headers with CSP
+  // Trust proxy only in production (for accurate IP behind load balancer)
+  if (process.env.NODE_ENV === 'production') {
+    app.getHttpAdapter().getInstance().set('trust proxy', 1);
+  }
+
+  // Security headers via Helmet (baseline, CSP handled by interceptor)
   app.use(helmet({
-    contentSecurityPolicy: {
-      directives: {
-        defaultSrc: ["'self'"],
-        scriptSrc: ["'self'", "'unsafe-inline'"],
-        styleSrc: ["'self'", "'unsafe-inline'"],
-        imgSrc: ["'self'", 'data:', 'https:'],
-        connectSrc: ["'self'", process.env.FRONTEND_URL || 'http://localhost:3000'],
-        fontSrc: ["'self'", 'https:', 'data:'],
-        frameAncestors: ["'none'"],
-      },
+    contentSecurityPolicy: false, // We handle this via CspInterceptor with nonces
+    crossOriginEmbedderPolicy: false, // Handled in interceptor
+    hsts: {
+      maxAge: 31536000,
+      includeSubDomains: true,
+      preload: true,
     },
-    crossOriginEmbedderPolicy: false,
-    hsts: { maxAge: 31536000, includeSubDomains: true, preload: true },
+    noSniff: true,
+    xssFilter: true,
+    referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
+    permittedCrossDomainPolicies: { permittedPolicies: 'none' },
+    originAgentCluster: true,
   }));
 
   app.use(cookieParser());
 
-  // Stripe webhook needs raw body — isolated to this route only
-  app.use('/subscriptions/webhook', express.raw({ type: 'application/json' }));
+  // Stripe webhook needs raw body — isolated route
+  app.use('/v1/subscriptions/webhook', express.raw({ type: 'application/json' }));
 
-  // Strict CORS with explicit allowlist
+  // Global body parser with size limits
+  app.use(express.json({ limit: '1mb' }));
+  app.use(express.urlencoded({ extended: true, limit: '1mb' }));
+
+  // Strict CORS
   const allowedOrigins = (process.env.ALLOWED_ORIGINS || process.env.FRONTEND_URL || 'http://localhost:3000')
     .split(',')
     .map((o) => o.trim());
@@ -44,44 +53,41 @@ async function bootstrap() {
       if (!origin || allowedOrigins.includes(origin)) {
         callback(null, true);
       } else {
-        callback(new Error(`Origin ${origin} not allowed by CORS`));
+        callback(new Error(`Origin ${origin} not allowed by CORS`), false);
       }
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-ID'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-CSRF-Token', 'X-Request-ID'],
+    exposedHeaders: ['X-CSRF-Token', 'X-Request-ID'],
+    maxAge: 86400,
   });
 
-  // URI-based API versioning (/v1/auth/login)
+  // API versioning
   app.enableVersioning({
     type: VersioningType.URI,
     defaultVersion: '1',
     prefix: 'v',
   });
 
+  // Global pipes
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
       forbidNonWhitelisted: true,
       transform: true,
+      transformOptions: { enableImplicitConversion: false },
     }),
+    new SanitizePipe(false), // Strict sanitization by default
   );
 
+  // Global interceptors
+  app.useGlobalInterceptors(new CspInterceptor());
 
-// In bootstrap(), before app.listen():
-const redisService = app.get(RedisService);
-const pubClient = redisService.getClient().duplicate();
-const subClient = redisService.getClient().duplicate();
+  // Replace default throttler guard with custom
+  // (In AppModule, change APP_GUARD provider to use CustomThrottlerGuard)
 
-const ioAdapter = new IoAdapter(app);
-(ioAdapter as any).createIOServer = (port: number, options?: any) => {
-  const server = require('socket.io')(port, options);
-  server.adapter(createAdapter(pubClient, subClient));
-  return server;
-};
-
-app.useWebSocketAdapter(ioAdapter);
   await app.listen(process.env.PORT || 4000);
-  console.log(`Backend running on port ${process.env.PORT || 4000}`);
+  console.log(`Backend running securely on port ${process.env.PORT || 4000}`);
 }
 bootstrap();
