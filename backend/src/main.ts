@@ -8,6 +8,7 @@ import { Logger } from 'nestjs-pino';
 import { CspInterceptor } from './common/interceptors/csp.interceptor';
 import { SanitizePipe } from './common/pipes/sanitize.pipe';
 import { CustomThrottlerGuard } from './common/guards/throttler.guard';
+import * as compression from 'compression';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { bufferLogs: true });
@@ -70,6 +71,15 @@ async function bootstrap() {
     prefix: 'v',
   });
 
+  app.use(compression({
+  filter: (req, res) => {
+    if (req.headers['x-no-compression']) return false;
+    return compression.filter(req, res);
+  },
+  level: 6, // balance between CPU and size
+  threshold: 1024, // only compress responses > 1KB
+}));
+  
   // Global pipes
   app.useGlobalPipes(
     new ValidationPipe({
