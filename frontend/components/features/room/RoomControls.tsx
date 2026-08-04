@@ -14,7 +14,8 @@ import {
   MessageSquare,
   Settings,
   Hand,
-  PictureInPicture,
+  BarChart3,
+  Paintbrush,
 } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
@@ -29,6 +30,8 @@ interface RoomControlsProps {
   onToggleChat: () => void;
   onEndCall: () => void;
   onOpenDevices: () => void;
+  onTogglePoll: () => void;
+  onToggleWhiteboard: () => void;
   chatUnread?: number;
   participantCount?: number;
 }
@@ -43,13 +46,14 @@ export function RoomControls({
   onToggleChat,
   onEndCall,
   onOpenDevices,
+  onTogglePoll,
+  onToggleWhiteboard,
   chatUnread = 0,
-  participantCount = 2,
 }: RoomControlsProps) {
   const [raisedHand, setRaisedHand] = useState(false);
 
   return (
-    <div className="flex items-center justify-center gap-2 sm:gap-3 p-4 border-t border-border bg-background/80 backdrop-blur-xl">
+    <div className="flex items-center justify-center gap-2 sm:gap-3 p-4 border-t border-border bg-background/80 backdrop-blur-xl shrink-0">
       <div className="flex items-center gap-2 rounded-2xl glass px-4 py-2">
         <Tooltip content={isMuted ? 'Unmute (M)' : 'Mute (M)'}>
           <Button
@@ -94,6 +98,18 @@ export function RoomControls({
             className="rounded-full"
           >
             <Hand className={cn('h-5 w-5', raisedHand && 'text-warning')} />
+          </Button>
+        </Tooltip>
+
+        <Tooltip content="Create poll">
+          <Button variant="ghost" size="icon" onClick={onTogglePoll} className="rounded-full">
+            <BarChart3 className="h-5 w-5" />
+          </Button>
+        </Tooltip>
+
+        <Tooltip content="Whiteboard">
+          <Button variant="ghost" size="icon" onClick={onToggleWhiteboard} className="rounded-full">
+            <Paintbrush className="h-5 w-5" />
           </Button>
         </Tooltip>
 
