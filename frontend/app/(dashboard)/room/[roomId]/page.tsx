@@ -61,6 +61,7 @@ export default function RoomPage() {
     isMuted,
     isVideoOff,
     isScreenSharing,
+    turnLoading,
     setupPeerConnection,
     toggleMute,
     toggleVideo,
@@ -113,6 +114,18 @@ export default function RoomPage() {
     if (devices.video !== selectedCamera) switchCamera(devices.video);
     if (devices.audio !== selectedMicrophone) switchMicrophone(devices.audio);
   };
+
+  // ==================== TURN LOADING STATE ====================
+  if (turnLoading) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-4 animate-fade-in">
+          <div className="h-10 w-10 animate-spin rounded-full border-4 border-primary/30 border-t-primary" />
+          <p className="text-sm text-muted-foreground">Initializing secure connection...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen flex-col bg-background overflow-hidden">
