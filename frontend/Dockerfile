@@ -3,16 +3,12 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# Copy package files (no lockfile in workspace sub-package, use npm install)
 COPY package.json ./
 RUN npm install
 
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm run build
-
-# Remove dev dependencies
-RUN npm prune --production
 
 # ============ PRODUCTION STAGE ============
 FROM node:20-alpine AS production
