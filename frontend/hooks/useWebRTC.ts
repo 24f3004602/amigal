@@ -2,30 +2,9 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useToast } from '@/components/ui/Toast';
+import { useTurnServers } from './useTurnServers';
 
-// ==================== TURN/STUN CONFIGURATION ====================
-// In production, fetch these from your API or environment
-const ICE_SERVERS: RTCIceServer[] = [
-  { urls: 'stun:stun.l.google.com:19302' },
-  { urls: 'stun:stun1.l.google.com:19302' },
-  // Add your TURN servers here:
-  // {
-  //   urls: 'turns:turn.yourdomain.com:5349',
-  //   username: 'user',
-  //   credential: 'pass',
-  // },
-];
-
-const PC_CONFIG: RTCConfiguration = {
-  iceServers: ICE_SERVERS,
-  iceTransportPolicy: 'all',
-  iceCandidatePoolSize: 10,
-  bundlePolicy: 'max-bundle',
-  rtcpMuxPolicy: 'require',
-  // Security: Require DTLS for all peer connections
-  // Note: 'dtlsRole' is not standard RTCConfiguration; removed to avoid TS errors
-};
-
+// ==================== MEDIA CONSTRAINTS ====================
 const MEDIA_CONSTRAINTS: MediaStreamConstraints = {
   video: {
     width: { ideal: 1280, min: 640 },
@@ -42,13 +21,35 @@ const MEDIA_CONSTRAINTS: MediaStreamConstraints = {
   },
 };
 
+// ==================== TYPES ====================
 export interface ConnectionQuality {
-  bitrate: number;      // kbps
-  packetLoss: number;   // percentage
-  latency: number;      // ms
+  bitrate: number;
+  packetLoss: number;
+  latency: number;
   fps: number;
   resolution: string;
   state: RTCPeerConnectionState;
+}
+
+interface UseWebRTCReturn {
+  localStream: MediaStream | null;
+  remoteStream: MediaStream | null;
+  connectionState: RTCPeerConnectionState;
+  iceConnectionState: RTCIceConnectionState;
+  quality: ConnectionQuality;
+  isMuted: boolean;
+  isVideoOff: boolean;
+  isScreenSharing: boolean;
+  turnLoading: boolean;
+  setupPeerConnection: (isInitiator: boolean) => Promise<void>;
+  toggleMute: () => void;
+  toggleVideo: () => void;
+  startScreenShare: () => Promise<void>;
+  stopScreenShare: () => Promise<void>;
+  switchCamera: (deviceId: string) => Promise<void>;
+  switchMicrophone: (deviceId: string) => Promise<void>;
+  togglePictureInPicture: (videoElement: HTMLVideoElement) => Promise<void>;
+  endCall: () => void;
 }
 
 export function useWebRTC(
@@ -56,8 +57,10 @@ export function useWebRTC(
   mode: 'text' | 'video',
   socket: any,
   preferredDeviceId?: { video?: string; audio?: string }
-) {
+): UseWebRTCReturn {
   const { toast } = useToast();
+  const { iceServers, loading: turnLoading } = useTurnServers();
+
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
   const remoteStreamRef = useRef<MediaStream | null>(null);
@@ -66,8 +69,7 @@ export function useWebRTC(
   const makingOfferRef = useRef(false);
   const ignoreOfferRef = useRef(false);
   const politeRef = useRef(false);
-  const reconnectAttemptsRef = useRef(0);
-  const MAX_RECONNECT_ATTEMPTS = 5;
+  const isCleaningUp = useRef(false);
 
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
@@ -88,16 +90,14 @@ export function useWebRTC(
 
   // ==================== CLEANUP ====================
   const cleanup = useCallback(() => {
+    if (isCleaningUp.current) return;
+    isCleaningUp.current = true;
+
     if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
     if (statsIntervalRef.current) clearInterval(statsIntervalRef.current);
 
     localStreamRef.current?.getTracks().forEach((t) => {
       t.stop();
-      try {
-        localStreamRef.current?.removeTrack(t);
-      } catch {
-        // Track may already be removed
-      }
     });
     screenStream?.getTracks().forEach((t) => t.stop());
 
@@ -108,14 +108,14 @@ export function useWebRTC(
     pcRef.current = null;
     localStreamRef.current = null;
     remoteStreamRef.current = null;
-    reconnectAttemptsRef.current = 0;
 
     setLocalStream(null);
     setRemoteStream(null);
     setConnectionState('closed');
-    setIceConnectionState('closed');
     setIsScreenSharing(false);
     setScreenStream(null);
+
+    isCleaningUp.current = false;
   }, [screenStream]);
 
   // ==================== STATS MONITORING ====================
@@ -148,74 +148,97 @@ export function useWebRTC(
             width = report.frameWidth || 0;
             height = report.frameHeight || 0;
           }
-          if (report.type === 'candidate-pair' && report.state === 'succeeded') {
-            // Current round-trip time in seconds → ms
-            if (report.currentRoundTripTime) {
-              setQuality((q) => ({ ...q, latency: Math.round(report.currentRoundTripTime * 1000) }));
-            }
-          }
         });
 
         const packetLossPercent = packetsReceived > 0 ? (packetsLost / (packetsLost + packetsReceived)) * 100 : 0;
 
-        setQuality((prev) => ({
-          ...prev,
+        setQuality({
           bitrate: Math.round(bitrate),
           packetLoss: Math.round(packetLossPercent * 100) / 100,
+          latency: 0,
           fps,
           resolution: width && height ? `${width}x${height}` : '',
-          state: pcRef.current?.connectionState || 'new',
-        }));
-      } catch (err) {
-        // Stats collection failed silently
+          state: pcRef.current.connectionState,
+        });
+      } catch {
+        // Silently ignore stats errors
       }
     }, 2000);
   }, []);
 
+  // ==================== GET LOCAL MEDIA ====================
+  const getLocalMedia = useCallback(async () => {
+    if (mode === 'text') return null;
+
+    try {
+      const constraints: MediaStreamConstraints = {
+        ...MEDIA_CONSTRAINTS,
+        video: preferredDeviceId?.video
+          ? { ...(MEDIA_CONSTRAINTS.video as object), deviceId: { exact: preferredDeviceId.video } }
+          : MEDIA_CONSTRAINTS.video,
+        audio: preferredDeviceId?.audio
+          ? { ...(MEDIA_CONSTRAINTS.audio as object), deviceId: { exact: preferredDeviceId.audio } }
+          : MEDIA_CONSTRAINTS.audio,
+      };
+
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      localStreamRef.current = stream;
+      setLocalStream(stream);
+      return stream;
+    } catch (err: any) {
+      toast.error(`Camera/Mic access denied: ${err.message}`);
+      throw err;
+    }
+  }, [preferredDeviceId, mode, toast]);
+
+  // ==================== ICE RESTART ====================
+  const handleIceRestart = useCallback(async () => {
+    if (!pcRef.current || pcRef.current.signalingState === 'closed') return;
+    try {
+      const offer = await pcRef.current.createOffer({ iceRestart: true });
+      await pcRef.current.setLocalDescription(offer);
+      socket?.emit('offer', { roomId, offer });
+      toast.info('Attempting to reconnect...');
+    } catch (err) {
+      console.error('ICE restart failed:', err);
+      toast.error('Connection failed. Please rejoin.');
+    }
+  }, [roomId, socket, toast]);
+
   // ==================== CREATE PEER CONNECTION ====================
   const createPeerConnection = useCallback(() => {
-    const pc = new RTCPeerConnection(PC_CONFIG);
-    pcRef.current = pc;
+    if (iceServers.length === 0) {
+      throw new Error('TURN servers not loaded yet');
+    }
 
-    // Security: Handle DTLS errors
-    (pc as any).ondtlserror = (e: Event) => {
-      console.error('DTLS error:', e);
-      toast.error('Secure connection error. Ending call.');
-      cleanup();
-    };
+    const pc = new RTCPeerConnection({
+      iceServers,
+      iceTransportPolicy: 'all',
+      iceCandidatePoolSize: 10,
+      bundlePolicy: 'max-bundle',
+      rtcpMuxPolicy: 'require',
+    });
+
+    pcRef.current = pc;
 
     pc.onconnectionstatechange = () => {
       const state = pc.connectionState;
       setConnectionState(state);
 
       if (state === 'failed') {
-        reconnectAttemptsRef.current += 1;
-        if (reconnectAttemptsRef.current <= MAX_RECONNECT_ATTEMPTS) {
-          toast.error(`Connection failed. Reconnecting (${reconnectAttemptsRef.current}/${MAX_RECONNECT_ATTEMPTS})...`);
-          handleIceRestart();
-        } else {
-          toast.error('Connection failed permanently. Please rejoin.');
-          cleanup();
-        }
+        toast.error('Connection failed. Attempting to reconnect...');
+        handleIceRestart();
       }
-
       if (state === 'disconnected') {
         reconnectTimeoutRef.current = setTimeout(() => {
           if (pc.connectionState === 'disconnected') {
-            reconnectAttemptsRef.current += 1;
-            if (reconnectAttemptsRef.current <= MAX_RECONNECT_ATTEMPTS) {
-              toast.error('Connection lost. Reconnecting...');
-              handleIceRestart();
-            } else {
-              toast.error('Connection lost. Please rejoin.');
-              cleanup();
-            }
+            toast.error('Connection lost. Reconnecting...');
+            handleIceRestart();
           }
         }, 5000);
       }
-
       if (state === 'connected') {
-        reconnectAttemptsRef.current = 0;
+        toast.success('Connected');
       }
     };
 
@@ -223,12 +246,9 @@ export function useWebRTC(
       setIceConnectionState(pc.iceConnectionState);
     };
 
-    // Security: Verify tracks before accepting
     pc.ontrack = (event) => {
       const [stream] = event.streams;
       if (stream) {
-        // All WebRTC tracks are encrypted by DTLS-SRTP by default in modern browsers
-        // This is a defense-in-depth check
         remoteStreamRef.current = stream;
         setRemoteStream(stream);
       }
@@ -252,35 +272,22 @@ export function useWebRTC(
       }
     };
 
+    pc.ondtlserror = () => {
+      toast.error('Secure connection error');
+      endCall();
+    };
+
     return pc;
-  }, [roomId, socket, toast, cleanup]);
-
-  // ==================== GET LOCAL MEDIA ====================
-  const getLocalMedia = useCallback(async () => {
-    try {
-      const constraints: MediaStreamConstraints = {
-        ...MEDIA_CONSTRAINTS,
-        video: preferredDeviceId?.video
-          ? { ...(MEDIA_CONSTRAINTS.video as object), deviceId: { exact: preferredDeviceId.video } }
-          : MEDIA_CONSTRAINTS.video,
-        audio: preferredDeviceId?.audio
-          ? { ...(MEDIA_CONSTRAINTS.audio as object), deviceId: { exact: preferredDeviceId.audio } }
-          : MEDIA_CONSTRAINTS.audio,
-      };
-
-      const stream = await navigator.mediaDevices.getUserMedia(constraints);
-      localStreamRef.current = stream;
-      setLocalStream(stream);
-      return stream;
-    } catch (err: any) {
-      toast.error(`Camera/Mic access denied: ${err.message}`);
-      throw err;
-    }
-  }, [preferredDeviceId, toast]);
+  }, [iceServers, roomId, socket, toast, handleIceRestart]);
 
   // ==================== SETUP (INITIATOR) ====================
   const setupPeerConnection = useCallback(
     async (isInitiator: boolean) => {
+      if (turnLoading) {
+        toast.info('Loading TURN servers...');
+        return;
+      }
+
       politeRef.current = isInitiator;
 
       try {
@@ -288,9 +295,11 @@ export function useWebRTC(
         const pc = createPeerConnection();
         const stream = await getLocalMedia();
 
-        stream.getTracks().forEach((track) => {
-          pc.addTrack(track, stream);
-        });
+        if (stream) {
+          stream.getTracks().forEach((track) => {
+            pc.addTrack(track, stream);
+          });
+        }
 
         if (isInitiator) {
           const offer = await pc.createOffer();
@@ -307,15 +316,23 @@ export function useWebRTC(
 
           if (ignoreOfferRef.current) return;
 
-          await pc.setRemoteDescription(new RTCSessionDescription(msg.offer));
-          const answer = await pc.createAnswer();
-          await pc.setLocalDescription(answer);
-          socket.emit('answer', { roomId, answer });
+          try {
+            await pc.setRemoteDescription(new RTCSessionDescription(msg.offer));
+            const answer = await pc.createAnswer();
+            await pc.setLocalDescription(answer);
+            socket.emit('answer', { roomId, answer });
+          } catch (err) {
+            console.error('Offer handling error:', err);
+          }
         });
 
         socket?.on('answer', async (msg: any) => {
-          if (pc.signalingState === 'have-local-offer') {
-            await pc.setRemoteDescription(new RTCSessionDescription(msg.answer));
+          try {
+            if (pc.signalingState === 'have-local-offer') {
+              await pc.setRemoteDescription(new RTCSessionDescription(msg.answer));
+            }
+          } catch (err) {
+            console.error('Answer handling error:', err);
           }
         });
 
@@ -337,20 +354,8 @@ export function useWebRTC(
         throw err;
       }
     },
-    [cleanup, createPeerConnection, getLocalMedia, roomId, socket, startStatsMonitoring, toast]
+    [cleanup, createPeerConnection, getLocalMedia, roomId, socket, startStatsMonitoring, toast, turnLoading]
   );
-
-  // ==================== ICE RESTART ====================
-  const handleIceRestart = useCallback(async () => {
-    if (!pcRef.current) return;
-    try {
-      const offer = await pcRef.current.createOffer({ iceRestart: true });
-      await pcRef.current.setLocalDescription(offer);
-      socket?.emit('offer', { roomId, offer });
-    } catch (err) {
-      console.error('ICE restart failed:', err);
-    }
-  }, [roomId, socket]);
 
   // ==================== DEVICE SWITCHING ====================
   const switchCamera = useCallback(
@@ -365,7 +370,6 @@ export function useWebRTC(
         const sender = pcRef.current.getSenders().find((s) => s.track?.kind === 'video');
         if (sender) await sender.replaceTrack(newTrack);
 
-        // Stop old video track
         localStreamRef.current.getVideoTracks().forEach((t) => t.stop());
         localStreamRef.current.removeTrack(localStreamRef.current.getVideoTracks()[0]);
         localStreamRef.current.addTrack(newTrack);
@@ -414,7 +418,7 @@ export function useWebRTC(
       const videoSender = pcRef.current.getSenders().find((s) => s.track?.kind === 'video');
       const originalTrack = localStreamRef.current?.getVideoTracks()[0];
 
-      if (videoSender) {
+      if (videoSender && stream.getVideoTracks()[0]) {
         await videoSender.replaceTrack(stream.getVideoTracks()[0]);
       }
 
@@ -464,7 +468,7 @@ export function useWebRTC(
     try {
       if (document.pictureInPictureElement) {
         await document.exitPictureInPicture();
-      } else {
+      } else if (videoElement) {
         await videoElement.requestPictureInPicture();
       }
     } catch (err) {
@@ -472,10 +476,27 @@ export function useWebRTC(
     }
   }, []);
 
+  // ==================== END CALL ====================
+  const endCall = useCallback(() => {
+    cleanup();
+  }, [cleanup]);
+
   // ==================== LIFECYCLE ====================
   useEffect(() => {
-    return () => cleanup();
+    return () => {
+      cleanup();
+    };
   }, [cleanup]);
+
+  // Re-setup when iceServers change (e.g., after TURN credentials load)
+  useEffect(() => {
+    if (!turnLoading && iceServers.length > 0 && roomId && socket) {
+      // Only auto-setup if we haven't already
+      if (!pcRef.current && mode === 'video') {
+        setupPeerConnection(true);
+      }
+    }
+  }, [turnLoading, iceServers, roomId, socket, mode, setupPeerConnection]);
 
   return {
     localStream,
@@ -486,6 +507,7 @@ export function useWebRTC(
     isMuted,
     isVideoOff,
     isScreenSharing,
+    turnLoading,
     setupPeerConnection,
     toggleMute,
     toggleVideo,
@@ -494,6 +516,6 @@ export function useWebRTC(
     switchCamera,
     switchMicrophone,
     togglePictureInPicture,
-    endCall: cleanup,
+    endCall,
   };
 }
