@@ -4,8 +4,9 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { sanitizeChat } from '@/lib/sanitize';
 import { cn } from '@/lib/utils';
-import { FileText, Download, ImageIcon, ExternalLink } from 'lucide-react';
+import { FileText, Download, ExternalLink } from 'lucide-react';
 import type { ChatMessage } from '@/stores/chat.store';
 
 interface MessageContentProps {
@@ -20,12 +21,17 @@ export function MessageContent({ message, compact }: MessageContentProps) {
 
   switch (message.type) {
     case 'code':
-      return <CodeBlock content={message.text} filename={message.fileName} />;
+      return <CodeBlock content={sanitizeChat(message.text)} filename={message.fileName} />;
     
     case 'image':
       return (
         <div className="mt-1">
-          <a href={message.fileUrl} target="_blank" rel="noopener noreferrer" className="group relative inline-block overflow-hidden rounded-lg">
+          <a 
+            href={message.fileUrl} 
+            target="_blank" 
+            rel="noopener noreferrer" 
+            className="group relative inline-block overflow-hidden rounded-lg"
+          >
             <img
               src={message.fileUrl}
               alt={message.fileName || 'Uploaded image'}
@@ -98,11 +104,20 @@ export function MessageContent({ message, compact }: MessageContentProps) {
                 );
               },
               a({ children, href }) {
-                return (
-                  <a href={href} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline inline-flex items-center gap-0.5">
+                // Security: Validate URL before rendering link
+                const isSafe = href && (href.startsWith('http://') || href.startsWith('https://'));
+                return isSafe ? (
+                  <a 
+                    href={href} 
+                    target="_blank" 
+                    rel="noopener noreferrer" 
+                    className="text-primary hover:underline inline-flex items-center gap-0.5"
+                  >
                     {children}
                     <ExternalLink className="h-3 w-3" />
                   </a>
+                ) : (
+                  <span className="text-muted-foreground">{children}</span>
                 );
               },
               blockquote({ children }) {
@@ -114,7 +129,7 @@ export function MessageContent({ message, compact }: MessageContentProps) {
               },
             }}
           >
-            {message.text}
+            {sanitizeChat(message.text)}
           </ReactMarkdown>
         </div>
       );
