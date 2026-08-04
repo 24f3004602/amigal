@@ -157,3 +157,19 @@ model ReputationEvent {
 
   @@map("reputation_events")
 }
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  action      String
+  userId      String?
+  ipAddress   String
+  userAgent   String
+  description String
+  metadata    Json     @default("{}")
+  createdAt   DateTime @default(now())
+
+  @@index([action])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
