@@ -5,11 +5,16 @@
   "private": true,
   "scripts": {
     "build": "nest build",
+    "start": "node dist/main",
     "start:dev": "nest start --watch",
+    "start:debug": "nest start --debug --watch",
     "start:prod": "node dist/main",
-    "db:generate": "prisma generate --schema=src/prisma/schema.prisma",
-    "db:migrate": "prisma migrate dev --schema=src/prisma/schema.prisma",
-    "db:studio": "prisma studio --schema=src/prisma/schema.prisma"
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate deploy",
+    "prisma:seed": "ts-node prisma/seed.ts",
+    "db:setup": "prisma generate && prisma migrate deploy",
+    "test": "jest",
+    "test:e2e": "jest --config ./test/jest-e2e.json"
   },
   "dependencies": {
     "@nestjs/common": "^10.3.0",
