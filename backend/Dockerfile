@@ -3,16 +3,16 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-COPY package.json ./
+COPY package.json package-lock.json ./
 RUN npm install
 
-# Prisma schema is inside src/prisma in your repo
-COPY src/prisma ./prisma/
-RUN npx prisma generate
+# Generate Prisma client from schema
+COPY src/prisma/schema.prisma ./prisma/
+RUN npx prisma generate --schema=./prisma/schema.prisma
 
 COPY . .
 RUN npm run build
-RUN npm prune --production
+# Removed: RUN npm prune --production
 
 # ============ PRODUCTION STAGE ============
 FROM node:20-alpine AS production
@@ -22,10 +22,13 @@ WORKDIR /app
 RUN addgroup -g 1001 -S nodejs && \
     adduser -S nodejs -u 1001
 
-COPY --from=builder --chown=nodejs:nodejs /app/node_modules ./node_modules
+# Copy only production dependencies
+COPY --from=builder /app/package.json ./
+COPY --from=builder /app/package-lock.json ./
+RUN npm install --only=production
+
 COPY --from=builder --chown=nodejs:nodejs /app/dist ./dist
 COPY --from=builder --chown=nodejs:nodejs /app/prisma ./prisma
-COPY --from=builder --chown=nodejs:nodejs /app/package.json ./
 
 USER nodejs
 
