@@ -75,10 +75,10 @@ export function useWebRTC(
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
   const [connectionState, setConnectionState] = useState<RTCPeerConnectionState>('new');
   const [iceConnectionState, setIceConnectionState] = useState<RTCIceConnectionState>('new');
+  const screenStreamRef = useRef<MediaStream | null>(null);
   const [isMuted, setIsMuted] = useState(false);
   const [isVideoOff, setIsVideoOff] = useState(false);
   const [isScreenSharing, setIsScreenSharing] = useState(false);
-  const [screenStream, setScreenStream] = useState<MediaStream | null>(null);
   const [quality, setQuality] = useState<ConnectionQuality>({
     bitrate: 0,
     packetLoss: 0,
@@ -99,7 +99,7 @@ export function useWebRTC(
     localStreamRef.current?.getTracks().forEach((t) => {
       t.stop();
     });
-    screenStream?.getTracks().forEach((t) => t.stop());
+    screenStreamRef.current?.getTracks().forEach((t) => t.stop());
 
     pcRef.current?.getSenders().forEach((sender) => {
       if (sender.track) sender.replaceTrack(null);
@@ -108,15 +108,15 @@ export function useWebRTC(
     pcRef.current = null;
     localStreamRef.current = null;
     remoteStreamRef.current = null;
+    screenStreamRef.current = null;
 
     setLocalStream(null);
     setRemoteStream(null);
     setConnectionState('closed');
     setIsScreenSharing(false);
-    setScreenStream(null);
 
     isCleaningUp.current = false;
-  }, [screenStream]);
+  }, []);
 
   // ==================== STATS MONITORING ====================
   const startStatsMonitoring = useCallback(() => {
@@ -221,6 +221,83 @@ export function useWebRTC(
 
     pcRef.current = pc;
 
+  // ==================== SOCKET EVENT HANDLERS ====================
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleOffer = async (msg: any) => {
+      const pc = pcRef.current;
+      if (!pc) return;
+      const readyForOffer = !makingOfferRef.current && (pc.signalingState === 'stable' || politeRef.current);
+      ignoreOfferRef.current = !readyForOffer && !politeRef.current;
+
+      if (ignoreOfferRef.current) return;
+
+      try {
+        await pc.setRemoteDescription(new RTCSessionDescription(msg.offer));
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        socket.emit('answer', { roomId, answer });
+      } catch (err) {
+        console.error('Offer handling error:', err);
+      }
+    };
+
+    const handleAnswer = async (msg: any) => {
+      const pc = pcRef.current;
+      if (!pc) return;
+      try {
+        if (pc.signalingState === 'have-local-offer') {
+          await pc.setRemoteDescription(new RTCSessionDescription(msg.answer));
+        }
+      } catch (err) {
+        console.error('Answer handling error:', err);
+      }
+    };
+
+    const handleIceCandidate = async (msg: any) => {
+      const pc = pcRef.current;
+      if (!pc) return;
+      try {
+        await pc.addIceCandidate(new RTCIceCandidate(msg.candidate));
+      } catch (e) {
+        if (!ignoreOfferRef.current) console.error('ICE candidate error:', e);
+      }
+    };
+
+    const handlePeerJoined = () => {
+      toast.success('Peer joined the room');
+    };
+
+    socket.on('offer', handleOffer);
+    socket.on('answer', handleAnswer);
+    socket.on('ice-candidate', handleIceCandidate);
+    socket.on('peer-joined', handlePeerJoined);
+
+    return () => {
+      socket.off('offer', handleOffer);
+      socket.off('answer', handleAnswer);
+      socket.off('ice-candidate', handleIceCandidate);
+      socket.off('peer-joined', handlePeerJoined);
+    };
+  }, [socket, roomId, toast]);
+
+  // ==================== CREATE PEER CONNECTION ====================
+  const createPeerConnection = useCallback(() => {
+    if (iceServers.length === 0) {
+      throw new Error('TURN servers not loaded yet');
+    }
+
+    const pc = new RTCPeerConnection({
+      iceServers,
+      iceTransportPolicy: 'all',
+      iceCandidatePoolSize: 10,
+      bundlePolicy: 'max-bundle',
+      rtcpMuxPolicy: 'require',
+    });
+
+    pcRef.current = pc;
+
     pc.onconnectionstatechange = () => {
       const state = pc.connectionState;
       setConnectionState(state);
@@ -278,7 +355,7 @@ export function useWebRTC(
     };
 
     return pc;
-  }, [iceServers, roomId, socket, toast, handleIceRestart]);
+  }, [iceServers, roomId, socket, toast, handleIceRestart, endCall]);
 
   // ==================== SETUP (INITIATOR) ====================
   const setupPeerConnection = useCallback(
@@ -308,45 +385,6 @@ export function useWebRTC(
         }
 
         startStatsMonitoring();
-
-        // Socket event handlers
-        socket?.on('offer', async (msg: any) => {
-          const readyForOffer = !makingOfferRef.current && (pc.signalingState === 'stable' || politeRef.current);
-          ignoreOfferRef.current = !readyForOffer && !politeRef.current;
-
-          if (ignoreOfferRef.current) return;
-
-          try {
-            await pc.setRemoteDescription(new RTCSessionDescription(msg.offer));
-            const answer = await pc.createAnswer();
-            await pc.setLocalDescription(answer);
-            socket.emit('answer', { roomId, answer });
-          } catch (err) {
-            console.error('Offer handling error:', err);
-          }
-        });
-
-        socket?.on('answer', async (msg: any) => {
-          try {
-            if (pc.signalingState === 'have-local-offer') {
-              await pc.setRemoteDescription(new RTCSessionDescription(msg.answer));
-            }
-          } catch (err) {
-            console.error('Answer handling error:', err);
-          }
-        });
-
-        socket?.on('ice-candidate', async (msg: any) => {
-          try {
-            await pc.addIceCandidate(new RTCIceCandidate(msg.candidate));
-          } catch (e) {
-            if (!ignoreOfferRef.current) console.error('ICE candidate error:', e);
-          }
-        });
-
-        socket?.on('peer-joined', () => {
-          toast.success('Peer joined the room');
-        });
 
         return pc;
       } catch (err) {
@@ -422,7 +460,7 @@ export function useWebRTC(
         await videoSender.replaceTrack(stream.getVideoTracks()[0]);
       }
 
-      setScreenStream(stream);
+      screenStreamRef.current = stream;
       setIsScreenSharing(true);
 
       stream.getVideoTracks()[0].onended = async () => {
@@ -430,7 +468,7 @@ export function useWebRTC(
           await videoSender.replaceTrack(originalTrack);
         }
         setIsScreenSharing(false);
-        setScreenStream(null);
+        screenStreamRef.current = null;
       };
     } catch (err) {
       toast.error('Screen sharing failed');
@@ -438,17 +476,17 @@ export function useWebRTC(
   }, [toast]);
 
   const stopScreenShare = useCallback(async () => {
-    if (!pcRef.current || !screenStream) return;
+    if (!pcRef.current || !screenStreamRef.current) return;
     const videoSender = pcRef.current.getSenders().find((s) => s.track?.kind === 'video');
     const originalTrack = localStreamRef.current?.getVideoTracks()[0];
 
     if (originalTrack && videoSender) {
       await videoSender.replaceTrack(originalTrack);
     }
-    screenStream.getTracks().forEach((t) => t.stop());
+    screenStreamRef.current.getTracks().forEach((t) => t.stop());
     setIsScreenSharing(false);
-    setScreenStream(null);
-  }, [screenStream]);
+    screenStreamRef.current = null;
+  }, []);
 
   // ==================== MUTE / VIDEO TOGGLE ====================
   const toggleMute = useCallback(() => {
