@@ -27,7 +27,8 @@ model User {
   updatedAt         DateTime @updatedAt
   deletedAt         DateTime?
 
-  sessions          Session[]
+  sessionsAsA       Session[] @relation("UserA")
+  sessionsAsB       Session[] @relation("UserB")
   refreshTokens     RefreshToken[]
   reportsMade       Report[] @relation("Reporter")
   reportsReceived   Report[] @relation("Reported")
