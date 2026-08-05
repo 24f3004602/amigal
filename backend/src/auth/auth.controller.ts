@@ -9,7 +9,7 @@ export class AuthController {
   constructor(private authService: AuthService) {}
 
   @Post('register')
-  @Throttle(5, 60) // 5 attempts per minute per IP
+  @Throttle({ strict: { limit: 5, ttl: 60000 } }) // 5 attempts per minute per IP
   async register(
     @Body() body: { email: string; password: string; displayName?: string },
     @Res({ passthrough: true }) res: Response,
@@ -20,7 +20,7 @@ export class AuthController {
   }
 
   @Post('login')
-  @Throttle(5, 60)
+  @Throttle({ strict: { limit: 5, ttl: 60000 } }) // 5 attempts per minute per IP
   async login(
     @Body() body: { email: string; password: string },
     @Res({ passthrough: true }) res: Response,

@@ -1,6 +1,6 @@
 import { Injectable, CanActivate, ExecutionContext, ForbiddenException } from '@nestjs/common';
 import { Request } from 'express';
-import { createHash, randomBytes } from 'crypto';
+import { randomBytes, timingSafeEqual as cryptoTimingSafeEqual } from 'crypto';
 
 @Injectable()
 export class CsrfGuard implements CanActivate {
@@ -62,7 +62,7 @@ export class CsrfGuard implements CanActivate {
     try {
       const bufA = Buffer.from(a);
       const bufB = Buffer.from(b);
-      return bufA.length === bufB.length && crypto.timingSafeEqual(bufA, bufB);
+      return bufA.length === bufB.length && cryptoTimingSafeEqual(bufA, bufB);
     } catch {
       return false;
     }

@@ -17,8 +17,18 @@ interface Toast {
   duration?: number;
 }
 
+// `toast` is callable directly — toast('hi', 'success') — and also carries
+// per-type helpers so call sites can use toast.success('hi') / toast.error('!').
+interface ToastFn {
+  (message: string, type?: ToastType, duration?: number): void;
+  success: (message: string, duration?: number) => void;
+  error: (message: string, duration?: number) => void;
+  warning: (message: string, duration?: number) => void;
+  info: (message: string, duration?: number) => void;
+}
+
 interface ToastContextType {
-  toast: (message: string, type?: ToastType, duration?: number) => void;
+  toast: ToastFn;
   success: (message: string, duration?: number) => void;
   error: (message: string, duration?: number) => void;
 }
@@ -47,14 +57,24 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
 
   const remove = (id: string) => setToasts((prev) => prev.filter((t) => t.id !== id));
 
-  const toast = React.useCallback((message: string, type: ToastType = 'info', duration = 4000) => {
+  const show = React.useCallback((message: string, type: ToastType = 'info', duration = 4000) => {
     const id = Math.random().toString(36).slice(2);
     setToasts((prev) => [...prev, { id, message, type, duration }]);
     setTimeout(() => remove(id), duration);
   }, []);
 
-  const success = React.useCallback((m: string, d?: number) => toast(m, 'success', d), [toast]);
-  const error = React.useCallback((m: string, d?: number) => toast(m, 'error', d), [toast]);
+  const toast = React.useMemo<ToastFn>(() => {
+    const fn = ((message: string, type?: ToastType, duration?: number) =>
+      show(message, type, duration)) as ToastFn;
+    fn.success = (m, d) => show(m, 'success', d);
+    fn.error = (m, d) => show(m, 'error', d);
+    fn.warning = (m, d) => show(m, 'warning', d);
+    fn.info = (m, d) => show(m, 'info', d);
+    return fn;
+  }, [show]);
+
+  const success = React.useCallback((m: string, d?: number) => show(m, 'success', d), [show]);
+  const error = React.useCallback((m: string, d?: number) => show(m, 'error', d), [show]);
 
   return (
     <ToastContext.Provider value={{ toast, success, error }}>

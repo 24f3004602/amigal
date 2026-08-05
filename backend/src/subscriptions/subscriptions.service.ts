@@ -2,9 +2,9 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import Stripe from 'stripe';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2023-10-16',
-});
+// apiVersion is intentionally omitted so the pinned version shipped with the
+// installed stripe SDK is used — it must match the SDK's generated types.
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
 const PLANS = {
   basic: {
@@ -61,7 +61,10 @@ export class SubscriptionsService {
         session.subscription as string,
       );
 
-      const priceId = subscription.items.data[0].price.id;
+      // As of API version 2025-xx (stripe-node v18+), billing period boundaries
+      // live on the subscription's items rather than on the subscription itself.
+      const firstItem = subscription.items.data[0];
+      const priceId = firstItem.price.id;
       const prices = await stripe.prices.list({
         lookup_keys: Object.values(PLANS).map((p) => p.priceLookupKey),
       });
@@ -78,7 +81,7 @@ export class SubscriptionsService {
           subscriptionStatus: 'active',
           subscriptionTier: tier,
           stripeSubscriptionId: subscription.id,
-          subscriptionEndsAt: new Date(subscription.current_period_end * 1000),
+          subscriptionEndsAt: new Date(firstItem.current_period_end * 1000),
           videoChatsLimit: limit,
         },
       });

@@ -1,4 +1,5 @@
 'use client';
+
 import { useState, useCallback } from 'react';
 import { useSocket } from './useSocket';
 import { api } from '@/lib/api';
@@ -27,7 +28,6 @@ export function useMatchmaking() {
           return data.data;
         }
 
-        // If waiting, listen for socket event
         return new Promise((resolve) => {
           const handler = (matchData: any) => {
             setStatus('found');

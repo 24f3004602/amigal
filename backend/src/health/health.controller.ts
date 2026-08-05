@@ -8,6 +8,7 @@ import {
   DiskHealthIndicator,
 } from '@nestjs/terminus';
 import { RedisHealthIndicator } from './redis.health';
+import { PrismaService } from '../prisma/prisma.service';
 
 @Controller('health')
 export class HealthController {
@@ -15,6 +16,7 @@ export class HealthController {
     private health: HealthCheckService,
     private http: HttpHealthIndicator,
     private prisma: PrismaHealthIndicator,
+    private prismaClient: PrismaService,
     private memory: MemoryHealthIndicator,
     private disk: DiskHealthIndicator,
     private redis: RedisHealthIndicator,
@@ -24,7 +26,7 @@ export class HealthController {
   @HealthCheck()
   check() {
     return this.health.check([
-      () => this.prisma.pingCheck('database'),
+      () => this.prisma.pingCheck('database', this.prismaClient),
       () => this.redis.pingCheck('redis'),
       () => this.memory.checkHeap('memory_heap', 512 * 1024 * 1024), // 512MB
       () => this.memory.checkRSS('memory_rss', 1024 * 1024 * 1024),   // 1GB
@@ -40,7 +42,7 @@ export class HealthController {
   @Get('readiness')
   readiness() {
     return this.health.check([
-      () => this.prisma.pingCheck('database'),
+      () => this.prisma.pingCheck('database', this.prismaClient),
       () => this.redis.pingCheck('redis'),
     ]);
   }

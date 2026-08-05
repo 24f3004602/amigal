@@ -52,7 +52,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   @SubscribeMessage('chat-message')
-  @Throttle(10, 1000) // 10 messages per second max
+  @Throttle({ strict: { limit: 10, ttl: 1000 } }) // 10 messages per second max
   handleChatMessage(client: AuthSocket, payload: any) {
     if (!client.user) return;
     

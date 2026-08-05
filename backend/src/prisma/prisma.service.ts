@@ -28,11 +28,9 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
             });
           },
           async deleteMany({ model, operation, args, query }) {
-            const data = args.data || {};
-            data.deletedAt = new Date();
             return (this as any)[model].updateMany({
               where: args.where,
-              data,
+              data: { deletedAt: new Date() },
             });
           },
         },

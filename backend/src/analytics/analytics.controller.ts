@@ -1,5 +1,4 @@
-import { Controller, Post, Body } from '@nestjs/common';
-import { Logger } from 'nestjs-pino';
+import { Controller, Post, Body, Logger } from '@nestjs/common';
 
 @Controller('analytics')
 export class AnalyticsController {
@@ -8,7 +7,7 @@ export class AnalyticsController {
   @Post('vitals')
   async reportVitals(@Body() vitals: any) {
     // Log for aggregation (send to Datadog/New Relic in production)
-    this.logger.info({
+    this.logger.log({
       type: 'WEB_VITALS',
       ...vitals,
     });

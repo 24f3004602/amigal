@@ -205,22 +205,6 @@ export function useWebRTC(
     }
   }, [roomId, socket, toast]);
 
-  // ==================== CREATE PEER CONNECTION ====================
-  const createPeerConnection = useCallback(() => {
-    if (iceServers.length === 0) {
-      throw new Error('TURN servers not loaded yet');
-    }
-
-    const pc = new RTCPeerConnection({
-      iceServers,
-      iceTransportPolicy: 'all',
-      iceCandidatePoolSize: 10,
-      bundlePolicy: 'max-bundle',
-      rtcpMuxPolicy: 'require',
-    });
-
-    pcRef.current = pc;
-
   // ==================== SOCKET EVENT HANDLERS ====================
   useEffect(() => {
     if (!socket) return;

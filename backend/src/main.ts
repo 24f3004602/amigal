@@ -8,7 +8,7 @@ import { Logger } from 'nestjs-pino';
 import { CspInterceptor } from './common/interceptors/csp.interceptor';
 import { SanitizePipe } from './common/pipes/sanitize.pipe';
 import { CustomThrottlerGuard } from './common/guards/throttler.guard';
-import * as compression from 'compression';
+import compression from 'compression';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { bufferLogs: true });

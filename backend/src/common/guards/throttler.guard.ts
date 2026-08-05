@@ -1,4 +1,4 @@
-import { ThrottlerGuard } from '@nestjs/throttler';
+import { ThrottlerGuard, ThrottlerLimitDetail } from '@nestjs/throttler';
 import { Injectable, ExecutionContext } from '@nestjs/common';
 import { Request } from 'express';
 
@@ -16,7 +16,10 @@ export class CustomThrottlerGuard extends ThrottlerGuard {
     return `ip:${request.ip}:${uaHash}`;
   }
 
-  protected async throwThrottlingException(context: ExecutionContext): Promise<void> {
+  protected async throwThrottlingException(
+    context: ExecutionContext,
+    throttlerLimitDetail: ThrottlerLimitDetail,
+  ): Promise<void> {
     const request = context.switchToHttp().getRequest();
     
     // Log rate limit violations for security monitoring
@@ -28,6 +31,6 @@ export class CustomThrottlerGuard extends ThrottlerGuard {
       timestamp: new Date().toISOString(),
     });
 
-    super.throwThrottlingException(context);
+    return super.throwThrottlingException(context, throttlerLimitDetail);
   }
 }

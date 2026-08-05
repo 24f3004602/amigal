@@ -19,3 +19,4 @@ docker/data/
 .idea/
 .vscode/
 .env
+node_modules

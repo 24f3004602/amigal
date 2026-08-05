@@ -30,6 +30,7 @@ model User {
   stripeCustomerId  String?
   stripeSubscriptionId String?
   subscriptionStatus String  @default("inactive")
+  subscriptionEndsAt DateTime?
   totalSessions     Int      @default(0)
   positiveRatings   Int      @default(0)
   negativeRatings   Int      @default(0)
@@ -65,6 +66,8 @@ model Session {
   durationSeconds   Int?
   rating            Int?
   ratingTags        String[]
+  interestOverlap   Float?
+  regionMatch       Boolean?
 
   userA             User     @relation("UserA", fields: [userAId], references: [id])
   userB             User     @relation("UserB", fields: [userBId], references: [id])
@@ -132,6 +135,7 @@ model Report {
   createdAt   DateTime @default(now())
   resolvedAt  DateTime?
   reviewedAt  DateTime?
+  reviewedBy  String?
   resolution  String?
   chatLog     String?
 
@@ -150,9 +154,11 @@ model Report {
 model ReputationEvent {
   id          String   @id @default(uuid())
   userId      String
-  type        String
-  points      Int
+  type        String   @default("general")
+  points      Int      @default(0)
   change      Int      @default(0)
+  reason      String?
+  sessionId   String?
   description String?
   createdAt   DateTime @default(now())
 
@@ -160,6 +166,7 @@ model ReputationEvent {
 
   @@index([userId])
   @@index([type])
+  @@index([sessionId])
   @@index([createdAt])
   @@map("reputation_events")
 }
