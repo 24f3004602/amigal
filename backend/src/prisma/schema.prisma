@@ -54,8 +54,8 @@ model Session {
   terminationReason String?
   createdAt         DateTime @default(now())
 
-  userA             User     @relation(fields: [userAId], references: [id])
-  userB             User     @relation(fields: [userBId], references: [id])
+  userA             User     @relation("UserA", fields: [userAId], references: [id])
+  userB             User     @relation("UserB", fields: [userBId], references: [id])
   messages          ChatMessage[]
   reports           Report[]
 
