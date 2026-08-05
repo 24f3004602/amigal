@@ -27,6 +27,9 @@ COPY --from=builder /app/package.json ./
 COPY --from=builder /app/package-lock.json ./
 RUN npm install --only=production
 
+# Copy the custom generated Prisma Client directory from builder
+COPY --from=builder --chown=nodejs:nodejs /app/node_modules/.prisma ./node_modules/.prisma
+
 COPY --from=builder --chown=nodejs:nodejs /app/dist ./dist
 COPY --from=builder --chown=nodejs:nodejs /app/prisma ./prisma
 
