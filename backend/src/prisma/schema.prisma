@@ -27,6 +27,14 @@ model User {
   updatedAt         DateTime @updatedAt
   deletedAt         DateTime?
 
+  stripeCustomerId  String?
+  stripeSubscriptionId String?
+  subscriptionStatus String  @default("inactive")
+  totalSessions     Int      @default(0)
+  positiveRatings   Int      @default(0)
+  negativeRatings   Int      @default(0)
+  banReason         String?
+
   sessionsAsA       Session[] @relation("UserA")
   sessionsAsB       Session[] @relation("UserB")
   refreshTokens     RefreshToken[]
@@ -54,6 +62,9 @@ model Session {
   endedAt           DateTime?
   terminationReason String?
   createdAt         DateTime @default(now())
+  durationSeconds   Int?
+  rating            Int?
+  ratingTags        String[]
 
   userA             User     @relation("UserA", fields: [userAId], references: [id])
   userB             User     @relation("UserB", fields: [userBId], references: [id])
@@ -120,7 +131,9 @@ model Report {
   status      String   @default("pending")
   createdAt   DateTime @default(now())
   resolvedAt  DateTime?
+  reviewedAt  DateTime?
   resolution  String?
+  chatLog     String?
 
   session     Session  @relation(fields: [sessionId], references: [id])
   reporter    User     @relation("Reporter", fields: [reporterId], references: [id])
@@ -139,6 +152,7 @@ model ReputationEvent {
   userId      String
   type        String
   points      Int
+  change      Int      @default(0)
   description String?
   createdAt   DateTime @default(now())
 
