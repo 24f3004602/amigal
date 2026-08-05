@@ -62,7 +62,7 @@ export class SignalingGateway implements OnGatewayConnection, OnGatewayDisconnec
 
     this.subscriptions.set(client.id, { subscriber, handler });
 
-    this.logger.info(`Client connected: ${client.user.userId}`);
+    this.logger.log(`Client connected: ${client.user.userId}`);
   }
 
   async handleDisconnect(client: AuthSocket) {
@@ -78,7 +78,7 @@ export class SignalingGateway implements OnGatewayConnection, OnGatewayDisconnec
       this.subscriptions.delete(client.id);
     }
 
-    this.logger.info(`Client disconnected: ${client.user?.userId}`);
+    this.logger.log(`Client disconnected: ${client.user?.userId}`);
   }
 
   @SubscribeMessage('join-room')
@@ -103,7 +103,7 @@ export class SignalingGateway implements OnGatewayConnection, OnGatewayDisconnec
 
     client.join(payload.roomId);
     client.to(payload.roomId).emit('peer-joined', { userId: client.user.userId });
-    this.logger.info(`User ${client.user.userId} joined room ${payload.roomId}`);
+    this.logger.log(`User ${client.user.userId} joined room ${payload.roomId}`);
   }
 
   @SubscribeMessage('offer')
@@ -147,6 +147,6 @@ export class SignalingGateway implements OnGatewayConnection, OnGatewayDisconnec
 
     this.server.to(payload.roomId).emit('call-ended', { endedBy: client.user.userId });
     this.server.in(payload.roomId).socketsLeave(payload.roomId);
-    this.logger.info(`Call ended in room ${payload.roomId} by ${client.user.userId}`);
+    this.logger.log(`Call ended in room ${payload.roomId} by ${client.user.userId}`);
   }
 }

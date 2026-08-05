@@ -37,11 +37,11 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   constructor(private readonly logger: Logger) {}
 
   handleConnection(client: AuthSocket) {
-    this.logger.info(`Chat client connected: ${client.user?.userId}`);
+    this.logger.log(`Chat client connected: ${client.user?.userId}`);
   }
 
   handleDisconnect(client: AuthSocket) {
-    this.logger.info(`Chat client disconnected: ${client.user?.userId}`);
+    this.logger.log(`Chat client disconnected: ${client.user?.userId}`);
   }
 
   @SubscribeMessage('join-room')
