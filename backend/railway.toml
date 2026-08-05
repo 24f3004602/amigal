@@ -1,13 +1,14 @@
 [build]
-builder = "nixpacks"
-buildCommand = "npm run prisma:generate && npm run build"
+builder = "dockerfile"
+dockerfilePath = "Dockerfile"
 
 [deploy]
-startCommand = "npm run db:setup && (npm run start:prod || (echo 'DEBUG: start:prod failed with exit code $?' && sleep 60))"
+startCommand = "npm run db:deploy && npm run start:prod"
 healthcheckPath = "/health/liveness"
-healthcheckTimeout = 30
+healthcheckTimeout = 300
 restartPolicyType = "on_failure"
-numReplicas = 2
+restartPolicyMaxRetries = 10
+numReplicas = 1
 
 [deploy.env]
 NODE_ENV = "production"

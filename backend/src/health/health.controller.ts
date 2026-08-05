@@ -1,4 +1,4 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, VERSION_NEUTRAL } from '@nestjs/common';
 import {
   HealthCheck,
   HealthCheckService,
@@ -10,7 +10,9 @@ import {
 import { RedisHealthIndicator } from './redis.health';
 import { PrismaService } from '../prisma/prisma.service';
 
-@Controller('health')
+// Version-neutral: platform probes hit /health/* directly, without the /v1 prefix
+// applied by the global URI versioning in main.ts.
+@Controller({ path: 'health', version: VERSION_NEUTRAL })
 export class HealthController {
   constructor(
     private health: HealthCheckService,

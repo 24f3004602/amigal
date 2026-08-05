@@ -2,7 +2,6 @@
 backend/node_modules/
 backend/dist/
 backend/.env
-backend/src/prisma/migrations/
 
 # Frontend
 frontend/node_modules/

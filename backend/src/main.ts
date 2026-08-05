@@ -97,7 +97,10 @@ async function bootstrap() {
   // Replace default throttler guard with custom
   // (In AppModule, change APP_GUARD provider to use CustomThrottlerGuard)
 
-  await app.listen(process.env.PORT || 4000);
-  console.log(`Backend running securely on port ${process.env.PORT || 4000}`);
+  // Bind 0.0.0.0 explicitly — container platforms route to the container IP,
+  // not loopback.
+  const port = process.env.PORT || 4000;
+  await app.listen(port, '0.0.0.0');
+  console.log(`Backend running securely on port ${port}`);
 }
 bootstrap();
