@@ -4,7 +4,7 @@ buildCommand = "npm run prisma:generate && npm run build"
 
 [deploy]
 startCommand = "npm run db:setup && (npm run start:prod || (echo 'DEBUG: start:prod failed with exit code $?' && sleep 60))"
-healthcheckPath = "/health"
+healthcheckPath = "/health/liveness"
 healthcheckTimeout = 30
 restartPolicyType = "on_failure"
 numReplicas = 2
