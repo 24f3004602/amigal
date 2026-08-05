@@ -10,6 +10,10 @@ function Skeleton({ className, ...props }: React.HTMLAttributes<HTMLDivElement>)
   );
 }
 
+function Card({ children, className }: { children: React.ReactNode; className?: string }) {
+  return <div className={cn('glass-card p-6', className)}>{children}</div>;
+}
+
 function SkeletonCard() {
   return (
     <div className="glass-card p-6 space-y-4 animate-fade-in">
@@ -35,4 +39,4 @@ function SkeletonText({ lines = 3 }: { lines?: number }) {
   );
 }
 
-export { Skeleton, SkeletonCard, SkeletonText };
+export { Skeleton, SkeletonCard, SkeletonText, Card };

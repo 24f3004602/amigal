@@ -149,7 +149,7 @@ export default function MatchPage() {
               aria-pressed={isPrivate}
               aria-label="Toggle private room"
             >
-              <span className={cn('absolute top-1 left-1 h-4 w-4 rounded-full bg-white transition-transform', isPrivate && 'translate-x-5')} />
+              <span className={cn('absolute top-1 left-1 h-4 w-4 rounded-full bg-white transition-transform', isPrivate ? 'translate-x-5' : '')} />
             </button>
           </div>
           <AnimatePresence>

@@ -1,10 +1,7 @@
 import { Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import Stripe from 'stripe';
-
-// apiVersion is intentionally omitted so the pinned version shipped with the
-// installed stripe SDK is used — it must match the SDK's generated types.
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
 const PLANS = {
   basic: {
@@ -21,7 +18,14 @@ const PLANS = {
 
 @Injectable()
 export class SubscriptionsService {
-  constructor(private prisma: PrismaService) {}
+  private stripe: Stripe;
+
+  constructor(
+    private configService: ConfigService,
+    private prisma: PrismaService,
+  ) {
+    this.stripe = new Stripe(this.configService.get<string>('STRIPE_SECRET_KEY')!);
+  }
 
   async createCheckoutSession(userId: string, priceId: string) {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
@@ -29,7 +33,7 @@ export class SubscriptionsService {
 
     let customerId = user.stripeCustomerId;
     if (!customerId) {
-      const customer = await stripe.customers.create({ email: user.email });
+      const customer = await this.stripe.customers.create({ email: user.email });
       customerId = customer.id;
       await this.prisma.user.update({
         where: { id: userId },
@@ -37,7 +41,7 @@ export class SubscriptionsService {
       });
     }
 
-    const session = await stripe.checkout.sessions.create({
+    const session = await this.stripe.checkout.sessions.create({
       customer: customerId,
       line_items: [{ price: priceId, quantity: 1 }],
       mode: 'subscription',
@@ -49,15 +53,15 @@ export class SubscriptionsService {
   }
 
   async handleWebhook(signature: string, payload: Buffer) {
-    const event = stripe.webhooks.constructEvent(
+    const event = this.stripe.webhooks.constructEvent(
       payload,
       signature,
-      process.env.STRIPE_WEBHOOK_SECRET!,
+      this.configService.get<string>('STRIPE_WEBHOOK_SECRET')!,
     );
 
     if (event.type === 'checkout.session.completed') {
       const session = event.data.object as Stripe.Checkout.Session;
-      const subscription = await stripe.subscriptions.retrieve(
+      const subscription = await this.stripe.subscriptions.retrieve(
         session.subscription as string,
       );
 
@@ -65,7 +69,7 @@ export class SubscriptionsService {
       // live on the subscription's items rather than on the subscription itself.
       const firstItem = subscription.items.data[0];
       const priceId = firstItem.price.id;
-      const prices = await stripe.prices.list({
+      const prices = await this.stripe.prices.list({
         lookup_keys: Object.values(PLANS).map((p) => p.priceLookupKey),
       });
       const price = prices.data.find((p) => p.id === priceId);
@@ -110,6 +114,7 @@ export class SubscriptionsService {
     return { received: true };
   }
 
+
   async getPlans() {
     return Object.entries(PLANS).map(([key, plan]) => ({
       tier: key,
@@ -140,7 +145,7 @@ export class SubscriptionsService {
     });
 
     if (user?.stripeSubscriptionId) {
-      await stripe.subscriptions.cancel(user.stripeSubscriptionId);
+      await this.stripe.subscriptions.cancel(user.stripeSubscriptionId);
     }
 
     return { success: true };
