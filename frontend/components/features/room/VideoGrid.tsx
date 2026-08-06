@@ -15,6 +15,8 @@ interface VideoGridProps {
   isVideoOff?: boolean;
   remoteMuted?: boolean;
   remoteVideoOff?: boolean;
+  layout?: 'grid' | 'spotlight' | 'sidebar';
+  spotlightUserId?: string | null;
 }
 
 export function VideoGrid({
@@ -25,10 +27,20 @@ export function VideoGrid({
   isVideoOff = false,
   remoteMuted = false,
   remoteVideoOff = false,
+  layout = 'grid',
+  spotlightUserId = null,
 }: VideoGridProps) {
   const localRef = useRef<HTMLVideoElement>(null);
   const remoteRef = useRef<HTMLVideoElement>(null);
   const [pinned, setPinned] = useState<'local' | 'remote'>('remote');
+
+  // This is a 1:1 view, so `layout` collapses onto which feed is full-bleed:
+  // spotlight follows spotlightUserId, other layouts fall back to manual pinning.
+  useEffect(() => {
+    if (layout === 'spotlight' && spotlightUserId) {
+      setPinned(spotlightUserId === 'local' ? 'local' : 'remote');
+    }
+  }, [layout, spotlightUserId]);
 
   useEffect(() => {
     if (localRef.current && localStream) localRef.current.srcObject = localStream;

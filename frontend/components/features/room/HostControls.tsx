@@ -13,7 +13,7 @@ import {
   UserPlus,
   LayoutGrid,
   LayoutList,
-  Spotlight,
+  Focus,
   Shield,
   MoreHorizontal,
   UserX,
@@ -74,7 +74,7 @@ export function HostControls() {
       <ControlButton
         active={layout === 'spotlight'}
         onClick={() => setLayout('spotlight')}
-        icon={Spotlight}
+        icon={Focus}
         label="Spotlight"
       />
       <ControlButton

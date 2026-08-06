@@ -19,14 +19,17 @@ export function TurnTest() {
 
     pc.onicecandidate = (e) => {
       if (!e.candidate) return;
+      // Bind before the closure — narrowing from the guard above doesn't
+      // survive into the deferred setResults callback.
+      const candidate = e.candidate;
 
-      const type = e.candidate.candidate.includes('typ relay')
+      const type = candidate.candidate.includes('typ relay')
         ? '✅ TURN (relay)'
-        : e.candidate.candidate.includes('typ srflx')
+        : candidate.candidate.includes('typ srflx')
         ? '🟡 STUN (server reflexive)'
         : '⚪ Host';
 
-      setResults((prev) => [...prev, `${type}: ${e.candidate.address}:${e.candidate.port}`]);
+      setResults((prev) => [...prev, `${type}: ${candidate.address}:${candidate.port}`]);
     };
 
     pc.onicegatheringstatechange = () => {

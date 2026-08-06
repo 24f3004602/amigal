@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import { Avatar } from '@/components/ui/Avatar';
 import { Badge } from '@/components/ui/Badge';
 import { MessageContent } from './MessageContent';
+import { EmojiPicker } from './EmojiPicker';
 import { useChatStore } from '@/stores/chat.store';
 import { useAuth } from '@/hooks/useAuth';
 import { cn } from '@/lib/utils';

@@ -1,5 +1,10 @@
-export function cn(...inputs: string[]) {
-  return inputs.filter(Boolean).join(' ');
+import { clsx, type ClassValue } from 'clsx';
+import { twMerge } from 'tailwind-merge';
+
+// Accepts the conditional forms used across the components (`cond && 'cls'`,
+// arrays, objects) and lets tailwind-merge settle conflicting utilities.
+export function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs));
 }
 
 export function jaccardSimilarity(a: string[], b: string[]): number {
