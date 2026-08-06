@@ -21,10 +21,9 @@ describe('useAuth', () => {
   });
 
   it('initializes with null user', () => {
-    mockedFetch.mockResolvedValueOnce({
-      ok: false,
-      json: () => Promise.resolve({ success: false }),
-    });
+    mockedFetch.mockResolvedValueOnce(
+      new Response(JSON.stringify({ success: false }), { status: 200 }),
+    );
 
     const { result } = renderHook(() => useAuth(), { wrapper });
     expect(result.current.user).toBeNull();
@@ -34,14 +33,12 @@ describe('useAuth', () => {
     const mockUser = { id: '1', email: 'test@example.com', displayName: 'Test' };
 
     mockedFetch
-      .mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ success: true, data: mockUser }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ success: true, data: mockUser }),
-      });
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ success: true, data: mockUser }), { status: 200 }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ success: true, data: mockUser }), { status: 200 }),
+      );
 
     const { result } = renderHook(() => useAuth(), { wrapper });
 

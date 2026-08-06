@@ -22,3 +22,9 @@ node_modules
 
 # TypeScript incremental build info
 *.tsbuildinfo
+
+# Temporary lint/test outputs
+eslint_out.json
+eslint_report.txt
+tsc_out.txt
+backend_tsc.txt
