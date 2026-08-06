@@ -1,6 +1,6 @@
 [build]
 builder = "dockerfile"
-dockerfilePath = "Dockerfile"
+dockerfilePath = "docker/Dockerfile.backend"
 
 [deploy]
 startCommand = "npm run db:deploy && npm run start:prod"
@@ -12,4 +12,4 @@ numReplicas = 1
 
 [deploy.env]
 NODE_ENV = "production"
-PORT = "8080"
+PORT = "4000"
