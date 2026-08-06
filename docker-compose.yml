@@ -9,11 +9,11 @@ services:
       POSTGRES_PASSWORD: amigal_secret
       POSTGRES_DB: amigal
     ports:
-      - "5432:5432"
+      - '5432:5432'
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U amigal"]
+      test: ['CMD-SHELL', 'pg_isready -U amigal']
       interval: 5s
       timeout: 5s
       retries: 5
@@ -22,22 +22,22 @@ services:
     image: redis:7-alpine
     container_name: amigal-redis
     ports:
-      - "6379:6379"
+      - '6379:6379'
     volumes:
       - redis_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ['CMD', 'redis-cli', 'ping']
       interval: 5s
       timeout: 5s
       retries: 5
 
   backend:
     build:
-      context: ./backend
-      dockerfile: ../docker/Dockerfile.backend
+      context: .
+      dockerfile: docker/Dockerfile.backend
     container_name: amigal-backend
     ports:
-      - "4000:4000"
+      - '4000:4000'
     environment:
       - NODE_ENV=production
       - PORT=4000
@@ -57,11 +57,11 @@ services:
 
   frontend:
     build:
-      context: ./frontend
-      dockerfile: ../docker/Dockerfile.frontend
+      context: .
+      dockerfile: docker/Dockerfile.frontend
     container_name: amigal-frontend
     ports:
-      - "3000:3000"
+      - '3000:3000'
     environment:
       - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:4000}
     depends_on:
@@ -71,11 +71,11 @@ services:
     image: coturn/coturn:latest
     container_name: amigal-coturn
     ports:
-      - "3478:3478/tcp"
-      - "3478:3478/udp"
-      - "5349:5349/tcp"
-      - "5349:5349/udp"
-      - "10000-20000:10000-20000/udp"
+      - '3478:3478/tcp'
+      - '3478:3478/udp'
+      - '5349:5349/tcp'
+      - '5349:5349/udp'
+      - '10000-20000:10000-20000/udp'
     volumes:
       - ./docker/coturn.conf:/etc/coturn/turnserver.conf
     environment:

@@ -1,0 +1,70 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Node
+node_modules
+npm-debug.log
+yarn-error.log
+package-lock.json.bak
+.pnpm-store
+.pnpm
+
+# Development
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.vscode
+.idea
+*.swp
+*.swo
+.DS_Store
+
+# Build artifacts (but preserve for Docker build)
+.cache
+.turbo
+
+# Next.js build (but preserve for Docker build)
+.next/cache
+
+# Testing
+coverage
+.nyc_output
+cypress/screenshots
+cypress/videos
+playwright/
+test-results
+
+# CI/CD
+.github/workflows
+.husky
+.gitlab-ci.yml
+.circleci
+
+# Docs & misc
+README.md
+LICENSE
+.editorconfig
+.prettierignore
+.eslintignore
+*.md
+
+# Docker
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# Project-specific
+.claude
+.qodo
+railway.json
+.env
+.env.example
+
+# IDE
+*.sublime-project
+*.sublime-workspace
+.eslintrc.js
+prettier.config.js
