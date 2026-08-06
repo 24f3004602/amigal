@@ -9,6 +9,13 @@ const nextConfig = {
   reactStrictMode: true,
   swcMinify: true,
   output: 'standalone',
+
+  // The monorepo root .eslintrc.js applies strict rules (import/order,
+  // security/*, no-unsafe-*) across all files. Those are enforced by the
+  // `lint` script; don't gate production builds on them.
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
   
   images: {
     formats: ['image/avif', 'image/webp'],
