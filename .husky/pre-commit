@@ -10,6 +10,6 @@ npx lint-staged
 echo "📝 Type checking..."
 npm run typecheck --workspaces
 
-# Run affected tests
+# Run affected tests (skip if script missing)
 echo "🧪 Running affected tests..."
-npm run test:changed --workspaces
+npm run test:changed --workspaces --if-present
