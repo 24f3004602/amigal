@@ -2,6 +2,7 @@
 
 import dynamic from 'next/dynamic';
 import { cn } from '@/lib/utils';
+import { Theme } from 'emoji-picker-react';
 
 const Picker = dynamic(() => import('emoji-picker-react'), { ssr: false });
 
@@ -19,7 +20,7 @@ export function EmojiPicker({ onSelect, onClose }: EmojiPickerProps) {
             onEmojiClick={(emojiData) => onSelect(emojiData.emoji)}
             width={320}
             height={400}
-            theme="dark"
+            theme={Theme.DARK}
             lazyLoadEmojis
             searchPlaceholder="Search emoji..."
           />

@@ -88,6 +88,10 @@ export interface ServerToClientEvents {
   answer: (data: { answer: RTCSessionDescriptionInit; senderId: string }) => void;
   'ice-candidate': (data: { candidate: RTCIceCandidateInit; senderId: string }) => void;
   'call-ended': (data: { endedBy: string }) => void;
+  'chat-message': (data: { roomId: string; text: string; senderId: string; timestamp: string }) => void;
+  typing: (data: { roomId: string; name: string }) => void;
+  'stop-typing': (data: { roomId: string; name: string }) => void;
+  reaction: (data: { emoji: string }) => void;
   error: (data: { code: string; message: string }) => void;
 }
 
@@ -97,4 +101,8 @@ export interface ClientToServerEvents {
   answer: (payload: AnswerPayload) => void;
   'ice-candidate': (payload: IceCandidatePayload) => void;
   'end-call': (payload: { roomId: string }) => void;
+  'chat-message': (payload: { roomId: string; text: string; senderId: string; senderName?: string | null; senderAvatar?: string | null }) => void;
+  typing: (payload: { roomId: string; name: string }) => void;
+  'stop-typing': (payload: { roomId: string }) => void;
+  reaction: (payload: { emoji: string }) => void;
 }

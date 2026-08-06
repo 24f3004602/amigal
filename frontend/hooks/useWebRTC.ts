@@ -41,7 +41,7 @@ interface UseWebRTCReturn {
   isVideoOff: boolean;
   isScreenSharing: boolean;
   turnLoading: boolean;
-  setupPeerConnection: (isInitiator: boolean) => Promise<void>;
+  setupPeerConnection: (isInitiator: boolean) => Promise<RTCPeerConnection | undefined>;
   toggleMute: () => void;
   toggleVideo: () => void;
   startScreenShare: () => Promise<void>;
@@ -333,13 +333,8 @@ export function useWebRTC(
       }
     };
 
-    pc.ondtlserror = () => {
-      toast.error('Secure connection error');
-      endCall();
-    };
-
     return pc;
-  }, [iceServers, roomId, socket, toast, handleIceRestart, endCall]);
+  }, [iceServers, roomId, socket, toast, handleIceRestart]);
 
   // ==================== SETUP (INITIATOR) ====================
   const setupPeerConnection = useCallback(
@@ -433,7 +428,7 @@ export function useWebRTC(
     if (!pcRef.current) return;
     try {
       const stream = await navigator.mediaDevices.getDisplayMedia({
-        video: { cursor: 'always' as const, displaySurface: 'monitor' as const },
+        video: { cursor: 'always' as const, displaySurface: 'monitor' as const } as MediaTrackConstraints,
         audio: false,
       });
 

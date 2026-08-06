@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from 'next';
-import { Inter } from 'next/font/google';
+import localFont from 'next/font/local';
 import './globals.css';
 import { ThemeProvider } from '@/components/providers/ThemeProvider';
 import { AuthProvider } from '@/components/providers/AuthProvider';
@@ -7,8 +7,8 @@ import { SocketProvider } from '@/components/providers/SocketProvider';
 import { ToastProvider } from '@/components/ui/Toast';
 import { ServiceWorkerRegistration } from '@/components/providers/ServiceWorkerRegistration';
 
-const inter = Inter({
-  subsets: ['latin'],
+const inter = localFont({
+  src: '../public/fonts/inter-latin-variable.woff2',
   display: 'swap',
   variable: '--font-inter',
 });

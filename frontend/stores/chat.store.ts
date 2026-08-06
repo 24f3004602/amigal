@@ -15,7 +15,7 @@ export interface ChatMessage {
   type: MessageType;
   senderId: string;
   senderName: string;
-  senderAvatar?: string;
+  senderAvatar?: string | null;
   timestamp: number;
   editedAt?: number;
   deleted?: boolean;
