@@ -1,13 +1,19 @@
 'use client';
 
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { io, Socket } from 'socket.io-client';
 import type { ServerToClientEvents, ClientToServerEvents } from '@amigal/shared-types';
+import { createContext, useContext, useEffect, useMemo, useState, ReactNode } from 'react';
+import { io, Socket } from 'socket.io-client';
 
-const SocketContext = createContext<Socket<ServerToClientEvents, ClientToServerEvents> | null>(null);
+type AppSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
 
-export function SocketProvider({ children }: { children: ReactNode }) {
-  const [socket, setSocket] = useState<Socket<ServerToClientEvents, ClientToServerEvents> | null>(null);
+// The value is wrapped in an object so `undefined` (no provider above us) stays
+// distinguishable from `{ socket: null }` (provider mounted, not connected yet).
+// The socket is only created in an effect, so it is null during SSR/prerender
+// and on the first client render — that is not an error.
+const SocketContext = createContext<{ socket: AppSocket | null } | undefined>(undefined);
+
+export function SocketProvider({ children }: { children: ReactNode }): JSX.Element {
+  const [socket, setSocket] = useState<AppSocket | null>(null);
 
   useEffect(() => {
     const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
@@ -21,16 +27,21 @@ export function SocketProvider({ children }: { children: ReactNode }) {
 
     setSocket(s);
 
-    return () => {
+    return (): void => {
       s.disconnect();
     };
   }, []);
 
-  return <SocketContext.Provider value={socket}>{children}</SocketContext.Provider>;
+  const value = useMemo((): { socket: AppSocket | null } => ({ socket }), [socket]);
+
+  return <SocketContext.Provider value={value}>{children}</SocketContext.Provider>;
 }
 
-export const useSocketContext = () => {
+/** Returns the socket, or null until it connects. Callers must null-check. */
+export const useSocketContext = (): AppSocket | null => {
   const ctx = useContext(SocketContext);
-  if (!ctx) throw new Error('useSocketContext must be used within SocketProvider');
-  return ctx;
+  if (!ctx) {
+    throw new Error('useSocketContext must be used within SocketProvider');
+  }
+  return ctx.socket;
 };

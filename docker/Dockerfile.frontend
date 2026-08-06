@@ -1,15 +1,30 @@
 FROM node:20-alpine AS builder
 WORKDIR /app
 
-# Install repository dependencies (npm workspaces) - separate layer for caching
+# Prevent husky/git-hook install scripts from running in Docker (no .git present)
+ENV HUSKY=0
+
+# Install repository dependencies (npm workspaces) - separate layer for caching.
+# The frontend imports @amigal/shared-types, so packages/ must be present before
+# `npm ci` for the workspace symlink to be created.
 COPY package.json package-lock.json ./
 COPY frontend/package.json ./frontend/package.json
 COPY backend/package.json ./backend/package.json
 COPY packages ./packages
 RUN npm ci --frozen-lockfile
 
-# Copy remaining files and build frontend
+# Copy remaining files
 COPY . .
+
+# Build shared-types so its dist/ is guaranteed current rather than relying on
+# the committed build artifacts.
+RUN npm run build --workspace=@amigal/shared-types
+
+# NEXT_PUBLIC_* values are inlined into the client bundle at build time, so this
+# must be supplied as a build arg - setting it only at runtime has no effect.
+ARG NEXT_PUBLIC_API_URL=http://localhost:4000
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+
 WORKDIR /app/frontend
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm run build
@@ -19,18 +34,19 @@ WORKDIR /app
 
 ENV NODE_ENV=production \
     NODE_OPTIONS="--max-old-space-size=512" \
-    NEXT_TELEMETRY_DISABLED=1
+    NEXT_TELEMETRY_DISABLED=1 \
+    PORT=3000 \
+    HOSTNAME=0.0.0.0
 
 # Create non-root user for security
 RUN addgroup -g 1001 -S nodejs && adduser -S nextjs -u 1001
 
-# Copy built Next.js artifacts
-COPY --from=builder /app/frontend/public ./public
-COPY --from=builder /app/frontend/.next/standalone ./
-COPY --from=builder /app/frontend/.next/static ./.next/static
-
-# Ensure proper permissions
-RUN chown -R nextjs:nodejs /app
+# In a workspaces monorepo, `output: 'standalone'` traces from the repo root, so
+# the bundle is nested: standalone/frontend/server.js with standalone/node_modules
+# beside it. Preserve that layout - public/ and static/ go under ./frontend.
+COPY --from=builder --chown=nextjs:nodejs /app/frontend/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/frontend/.next/static ./frontend/.next/static
+COPY --from=builder --chown=nextjs:nodejs /app/frontend/public ./frontend/public
 
 USER nextjs
 
@@ -40,4 +56,4 @@ EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
   CMD wget --no-verbose --tries=1 --spider http://localhost:3000 || exit 1
 
-CMD ["node", "server.js"]
+CMD ["node", "frontend/server.js"]

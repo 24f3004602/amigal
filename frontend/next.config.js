@@ -1,9 +1,12 @@
 /** @type {import('next').NextConfig} */
 
+const path = require('path');
+
 // Only load bundle analyzer when ANALYZE=true
-const withBundleAnalyzer = process.env.ANALYZE === 'true'
-  ? require('@next/bundle-analyzer')({ enabled: true })
-  : (config) => config;
+const withBundleAnalyzer =
+  process.env.ANALYZE === 'true'
+    ? require('@next/bundle-analyzer')({ enabled: true })
+    : (config) => config;
 
 const nextConfig = {
   reactStrictMode: true,
@@ -16,7 +19,7 @@ const nextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
-  
+
   images: {
     formats: ['image/avif', 'image/webp'],
     deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048, 3840],
@@ -28,6 +31,12 @@ const nextConfig = {
 
   experimental: {
     optimizePackageImports: ['framer-motion', 'lucide-react'],
+
+    // This is an npm workspaces monorepo and we import @amigal/shared-types from
+    // packages/. Pin the trace root to the repo root so file tracing follows the
+    // workspace symlinks; otherwise Next infers it and the standalone layout can
+    // shift between environments (which the Dockerfile's COPY paths depend on).
+    outputFileTracingRoot: path.join(__dirname, '..'),
   },
 
   async headers() {
@@ -36,7 +45,10 @@ const nextConfig = {
         source: '/:path*',
         headers: [
           { key: 'X-DNS-Prefetch-Control', value: 'on' },
-          { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' },
+          {
+            key: 'Strict-Transport-Security',
+            value: 'max-age=63072000; includeSubDomains; preload',
+          },
         ],
       },
       {

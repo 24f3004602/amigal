@@ -59,6 +59,9 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile.frontend
+      args:
+        # Inlined into the client bundle at build time - must be a build arg.
+        - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:4000}
     container_name: amigal-frontend
     ports:
       - '3000:3000'

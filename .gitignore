@@ -19,3 +19,6 @@ docker/data/
 .vscode/
 .env
 node_modules
+
+# TypeScript incremental build info
+*.tsbuildinfo

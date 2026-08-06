@@ -1,13 +1,14 @@
 [build]
-builder = "nixpacks"
+builder = "dockerfile"
+dockerfilePath = "docker/Dockerfile.frontend"
 
 [deploy]
-startCommand = "npm start"
-healthcheckPath = "/api/health"
+healthcheckPath = "/"
 healthcheckTimeout = 100
 restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 10
 numReplicas = 2
 
 [deploy.env]
-NEXT_TELEMETRY_DISABLED = "1"
 NODE_ENV = "production"
+NEXT_TELEMETRY_DISABLED = "1"
