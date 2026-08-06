@@ -18,22 +18,36 @@ const PLANS = {
 
 @Injectable()
 export class SubscriptionsService {
-  private stripe: Stripe;
+  private stripe: Stripe | null = null;
 
   constructor(
     private configService: ConfigService,
     private prisma: PrismaService,
   ) {
-    this.stripe = new Stripe(this.configService.get<string>('STRIPE_SECRET_KEY')!);
+    // Stripe is optional at boot time — only initialize if configured, so a
+    // missing key doesn't crash the whole app on startup. Methods that need
+    // Stripe will throw a clear error if it wasn't configured.
+    const apiKey = this.configService.get<string>('STRIPE_SECRET_KEY');
+    if (apiKey) {
+      this.stripe = new Stripe(apiKey);
+    }
+  }
+
+  private getStripe(): Stripe {
+    if (!this.stripe) {
+      throw new Error('Stripe is not configured: missing STRIPE_SECRET_KEY');
+    }
+    return this.stripe;
   }
 
   async createCheckoutSession(userId: string, priceId: string) {
+    const stripe = this.getStripe();
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) throw new Error('User not found');
 
     let customerId = user.stripeCustomerId;
     if (!customerId) {
-      const customer = await this.stripe.customers.create({ email: user.email });
+      const customer = await stripe.customers.create({ email: user.email });
       customerId = customer.id;
       await this.prisma.user.update({
         where: { id: userId },
@@ -41,7 +55,7 @@ export class SubscriptionsService {
       });
     }
 
-    const session = await this.stripe.checkout.sessions.create({
+    const session = await stripe.checkout.sessions.create({
       customer: customerId,
       line_items: [{ price: priceId, quantity: 1 }],
       mode: 'subscription',
@@ -53,7 +67,8 @@ export class SubscriptionsService {
   }
 
   async handleWebhook(signature: string, payload: Buffer) {
-    const event = this.stripe.webhooks.constructEvent(
+    const stripe = this.getStripe();
+    const event = stripe.webhooks.constructEvent(
       payload,
       signature,
       this.configService.get<string>('STRIPE_WEBHOOK_SECRET')!,
@@ -61,7 +76,7 @@ export class SubscriptionsService {
 
     if (event.type === 'checkout.session.completed') {
       const session = event.data.object as Stripe.Checkout.Session;
-      const subscription = await this.stripe.subscriptions.retrieve(
+      const subscription = await stripe.subscriptions.retrieve(
         session.subscription as string,
       );
 
@@ -69,7 +84,7 @@ export class SubscriptionsService {
       // live on the subscription's items rather than on the subscription itself.
       const firstItem = subscription.items.data[0];
       const priceId = firstItem.price.id;
-      const prices = await this.stripe.prices.list({
+      const prices = await stripe.prices.list({
         lookup_keys: Object.values(PLANS).map((p) => p.priceLookupKey),
       });
       const price = prices.data.find((p) => p.id === priceId);
@@ -139,13 +154,14 @@ export class SubscriptionsService {
   }
 
   async cancelSubscription(userId: string) {
+    const stripe = this.getStripe();
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: { stripeSubscriptionId: true },
     });
 
     if (user?.stripeSubscriptionId) {
-      await this.stripe.subscriptions.cancel(user.stripeSubscriptionId);
+      await stripe.subscriptions.cancel(user.stripeSubscriptionId);
     }
 
     return { success: true };
