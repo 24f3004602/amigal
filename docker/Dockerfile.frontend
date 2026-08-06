@@ -7,6 +7,7 @@ ENV HUSKY=0
 # Install repository dependencies (npm workspaces) - separate layer for caching.
 # The frontend imports @amigal/shared-types, so packages/ must be present before
 # `npm ci` for the workspace symlink to be created.
+# Requires repo-root build context — see docker-compose.prod.yml / CI for context: .
 COPY package.json package-lock.json ./
 COPY frontend/package.json ./frontend/package.json
 COPY backend/package.json ./backend/package.json
@@ -14,6 +15,7 @@ COPY packages ./packages
 RUN npm ci --frozen-lockfile
 
 # Copy remaining files
+# Requires repo-root build context — see docker-compose.prod.yml / CI for context: .
 COPY . .
 
 # Build shared-types so its dist/ is guaranteed current rather than relying on

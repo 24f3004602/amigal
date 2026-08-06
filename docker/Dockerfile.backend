@@ -9,6 +9,7 @@ ENV HUSKY=0
 RUN apk add --no-cache python3 make g++
 
 # Install full workspace dependencies using root lockfile (monorepo-aware)
+# Requires repo-root build context — see docker-compose.prod.yml / CI for context: .
 COPY package.json package-lock.json ./
 COPY backend/package.json ./backend/package.json
 COPY frontend/package.json ./frontend/package.json
@@ -35,6 +36,7 @@ RUN apk add --no-cache curl
 
 # Install ONLY production dependencies directly (avoids npm prune stripping
 # real deps due to workspace hoisting quirks)
+# Requires repo-root build context — see docker-compose.prod.yml / CI for context: .
 COPY package.json package-lock.json ./
 COPY backend/package.json ./backend/package.json
 COPY frontend/package.json ./frontend/package.json

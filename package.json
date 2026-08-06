@@ -8,6 +8,8 @@
   ],
   "scripts": {
     "dev": "docker-compose up --build",
+    "docker:build:backend": "node scripts/docker-build.mjs backend",
+    "docker:build:frontend": "node scripts/docker-build.mjs frontend",
     "build": "npm run build --workspaces",
     "test": "npm run test --workspaces",
     "test:changed": "npm run test:changed --workspaces",
